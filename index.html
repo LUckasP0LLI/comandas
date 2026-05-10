@@ -407,20 +407,6 @@ body{
 .toast.err{background:var(--red);color:#fff;}
 
 /* ════════════════════════════════════════════
-   PAGAMENTO NA COMANDA
-   ════════════════════════════════════════════ */
-.btn-pagar-comanda{
-  width:100%;background:var(--green);color:#000;border:none;
-  font-family:'DM Sans',sans-serif;font-size:14px;font-weight:700;
-  padding:11px;border-radius:9px;cursor:pointer;transition:all .15s;
-  margin-bottom:6px;-webkit-tap-highlight-color:transparent;
-}
-.btn-pagar-comanda:hover{background:#5dd88a;}
-.btn-pagar-comanda:active{transform:scale(.98);}
-.btn-pagar-comanda.pago{background:var(--green-dim);color:var(--green);border:1px solid var(--green);}
-.btn-pagar-comanda.pago::before{content:'✓ ';}
-
-/* ════════════════════════════════════════════
    PRINT / PDF
    ════════════════════════════════════════════ */
 @media print{
@@ -846,656 +832,545 @@ function tocarAlerta() {
       osc.start(ctx.currentTime + delay);
       osc.stop(ctx.currentTime + delay + 0.25);
     };
-    tocar(0);
-    setTimeout(() => tocar(0.35), 350);
-  } catch(e) { console.error('Erro ao tocar alerta:', e); }
+    tocar(0);       // primeiro bipe
+    tocar(0.32);    // segundo bipe
+    tocar(0.64);    // terceiro bipe
+  } catch(e) { console.warn('Som indisponível:', e); }
 }
+
 function toggleSom() {
   somAtivo = !somAtivo;
   localStorage.setItem('xis_som', somAtivo ? 'on' : 'off');
-  document.getElementById('btn-som').textContent = somAtivo ? '🔔' : '🔕';
-  document.getElementById('bnav-som-icon').textContent = somAtivo ? '🔔' : '🔕';
-  if (somAtivo) getAudioCtx().resume();
+  const btn = document.getElementById('btn-som');
+  const bnavIcon = document.getElementById('bnav-som-icon');
+  const ico = somAtivo ? '🔔' : '🔕';
+  if (btn) { btn.textContent = ico; btn.title = somAtivo ? 'Mutar som' : 'Ativar som'; }
+  if (bnavIcon) bnavIcon.textContent = ico;
+  if (somAtivo) tocarAlerta();
+  toast(somAtivo ? 'Som ativado 🔔' : 'Som desativado 🔕');
 }
 
-// ══════════════════════════════════════════════
-// TOAST
-// ══════════════════════════════════════════════
-function showToast(msg, isErr = false) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'toast' + (isErr ? ' err' : '');
-  setTimeout(() => t.classList.add('show'), 10);
-  setTimeout(() => t.classList.remove('show'), 3000);
-}
+// IDs conhecidos — para detectar apenas pedidos NOVOS
+let pedidosConhecidos = null;
 
-// ══════════════════════════════════════════════
-// INIT
-// ══════════════════════════════════════════════
-window.addEventListener('DOMContentLoaded', () => {
-  const cfg = getConfig();
-  if (!cfg) {
-    document.getElementById('setup-screen').style.display = 'flex';
-    document.getElementById('loading-overlay').style.display = 'none';
-    return;
+function initFirebase(cfg) {
+  try {
+    firebase.initializeApp(cfg);
+    db = firebase.database();
+    pedidosRef = db.ref('pedidos');
+    historicoRef = db.ref('historico');
+    db.ref('.info/connected').on('value', s => {
+      const on = s.val() === true;
+      document.getElementById('status-dot').className = 'status-dot ' + (on?'online':'offline');
+      document.getElementById('status-lbl').textContent = on ? 'online' : 'offline';
+    });
+    pedidosRef.on('value', s => {
+      const novos = s.val() || {};
+      // Na primeira carga só registra os IDs existentes, sem tocar som
+      if (pedidosConhecidos === null) {
+        pedidosConhecidos = new Set(Object.keys(novos));
+      } else {
+        const chegando = Object.keys(novos).filter(id => !pedidosConhecidos.has(id));
+        if (chegando.length > 0) tocarAlerta();
+        pedidosConhecidos = new Set(Object.keys(novos));
+      }
+      pedidos = novos;
+      renderComandas();
+    });
+    historicoRef.orderByChild('despachado').limitToLast(200).on('value', s => { historico = s.val()||{}; renderHistorico(); });
+    hideLoading();
+    document.getElementById('app').style.display = 'block';
+    // Sincroniza ícone do botão de som
+    const btnSom = document.getElementById('btn-som');
+    btnSom.textContent = somAtivo ? '🔔' : '🔕';
+    btnSom.title = somAtivo ? 'Mutar som' : 'Ativar som';
+    renderMenu();
+    setDefaultDates();
+  } catch(e) {
+    document.getElementById('load-txt').textContent = 'Erro: ' + e.message;
+    setTimeout(() => { hideLoading(); document.getElementById('setup-screen').style.display = 'flex'; }, 1800);
   }
-
-  // init Firebase
-  firebase.initializeApp(cfg);
-  db = firebase.database();
-  pedidosRef = db.ref('pedidos');
-  historicoRef = db.ref('historico');
-
-  // listeners
-  pedidosRef.on('value', snap => {
-    pedidos = snap.val() || {};
-    renderizar();
-  });
-  historicoRef.on('value', snap => {
-    historico = snap.val() || {};
-    renderizarHistorico();
-  });
-
-  // primeiro render
-  setTimeout(() => {
-    document.getElementById('loading-overlay').style.opacity = '0';
-    setTimeout(() => {
-      document.getElementById('loading-overlay').style.display = 'none';
-      document.getElementById('app').style.display = 'block';
-    }, 400);
-  }, 800);
-
-  // Timer atualizado a cada MINUTO (não mais a cada segundo)
-  setInterval(atualizarTimers, 60000); // 60000ms = 1 minuto
-
-  // Também atualiza imediatamente ao carregar
-  atualizarTimers();
-
-  // menu
-  renderizarMenu();
-});
+}
+function hideLoading() {
+  const ov = document.getElementById('loading-overlay');
+  ov.style.opacity = '0';
+  setTimeout(() => ov.style.display = 'none', 400);
+}
 
 // ══════════════════════════════════════════════
-// SWITCH TABS
+// NAVEGAÇÃO
 // ══════════════════════════════════════════════
-function switchTab(tab) {
+function switchTab(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.bnav-btn').forEach(b => b.classList.remove('active'));
-
-  document.getElementById('view-' + tab).classList.add('active');
-  
-  const btn = document.getElementById('tab-' + (tab === 'comandas' ? 'cmd' : tab === 'lancar' ? 'lan' : 'rel'));
-  if (btn) btn.classList.add('active');
-  
-  const bnav = document.getElementById('bnav-' + (tab === 'comandas' ? 'cmd' : tab === 'lancar' ? 'lan' : tab === 'relatorio' ? 'rel' : 'cfg'));
-  if (bnav) bnav.classList.add('active');
-
-  if (tab === 'lancar') renderizarMenu();
+  document.getElementById('view-'+name).classList.add('active');
+  const hdrMap = {comandas:'cmd', lancar:'lan', relatorio:'rel'};
+  const navMap = {comandas:'bnav-cmd', lancar:'bnav-lan', relatorio:'bnav-rel'};
+  const hdrEl = document.getElementById('tab-'+hdrMap[name]);
+  const navEl = document.getElementById(navMap[name]);
+  if (hdrEl) hdrEl.classList.add('active');
+  if (navEl) navEl.classList.add('active');
+  if (name === 'lancar') renderMenu();
+  window.scrollTo({top:0, behavior:'smooth'});
 }
+
 function abrirConfig() {
-  if (!confirm('Ir para configuração do Firebase?')) return;
-  limparConfig();
+  const opcao = confirm('Clique OK para alternar o som 🔔\nClique Cancelar para reconfigurar Firebase ⚙️');
+  if (opcao) toggleSom();
+  else limparConfig();
 }
 
 // ══════════════════════════════════════════════
-// FILTRO
+// COMANDAS
 // ══════════════════════════════════════════════
-let filtroAtual = 'todos';
-function setFiltro(tipo, btn) {
-  filtroAtual = tipo;
-  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+let filtro = 'todos';
+function setFiltro(f, btn) {
+  filtro = f;
+  document.querySelectorAll('.chip').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  renderizar();
+  renderComandas();
 }
-
-// ══════════════════════════════════════════════
-// RENDERIZAR — COMANDAS
-// ══════════════════════════════════════════════
-function renderizar() {
+function renderComandas() {
+  const agora = Date.now();
+  const lista = Object.entries(pedidos).map(([id,p])=>({id,...p}))
+    .filter(p => filtro==='todos' || p.tipo===filtro)
+    .sort((a,b) => a.inicio - b.inicio);
+  document.getElementById('badge-n').textContent = Object.keys(pedidos).length;
+  const bnavBadge = document.getElementById('bnav-badge');
+  if (bnavBadge) bnavBadge.textContent = Object.keys(pedidos).length;
+  const del = Object.values(pedidos).filter(p=>p.tipo==='delivery').length;
+  const pro = Object.values(pedidos).filter(p=>p.tipo==='proprio').length;
+  document.getElementById('stats-wrap').innerHTML =
+    `<div class="stat-chip">🛵 <strong>${del}</strong></div><div class="stat-chip">✅ <strong>${pro}</strong></div>`;
   const grid = document.getElementById('grid');
   const empty = document.getElementById('empty-state');
-  const filtrados = Object.values(pedidos).filter(p => 
-    filtroAtual === 'todos' || p.tipo === filtroAtual
-  ).sort((a,b) => a.criadoEm - b.criadoEm);
-
-  if (!filtrados.length) {
-    grid.innerHTML = '';
-    empty.style.display = 'block';
-    document.getElementById('badge-n').textContent = '0';
-    document.getElementById('bnav-badge').textContent = '0';
-    return;
-  }
-
+  if (!lista.length) { empty.style.display='block'; grid.innerHTML=''; return; }
   empty.style.display = 'none';
-  grid.innerHTML = filtrados.map(p => renderizarCard(p)).join('');
-  document.getElementById('badge-n').textContent = filtrados.length;
-  document.getElementById('bnav-badge').textContent = filtrados.length;
+  grid.innerHTML = lista.map(p => buildCard(p, agora)).join('');
 }
+function buildCard(p, agora) {
+  const min = Math.floor((agora - p.inicio) / 60000);
+  const pct = Math.min(100, Math.round(min / URGENT_MIN * 100));
+  const urgente = min >= URGENT_MIN, alerta = min >= ALERT_MIN && !urgente;
+  const timerCls = urgente?'t-urg':alerta?'t-med':'t-ok';
+  const barColor = urgente?'var(--red)':alerta?'var(--accent)':'var(--green)';
+  const h = Math.floor(min/60), m = min%60;
+  const timerTxt = h>0 ? `${h}h${String(m).padStart(2,'0')}` : `${String(min).padStart(2,'0')}min`;
+  const metaLbl = urgente?'⚠️ ATRASADO':alerta?'Atenção':'Em preparo';
+  const pagIcon = {Pix:'💠',Dinheiro:'💵','Cartão de Crédito':'💳','Cartão de Débito':'💳'}[p.pagamento]||'💳';
+  const tipoCls = p.tipo==='delivery'?'badge-d':'badge-p';
+  const tipoLbl = p.tipo==='delivery'?'🛵 Delivery':'✅ Própria';
 
-function renderizarCard(p) {
-  const mins = Math.floor((Date.now() - p.criadoEm) / 60000);
-  let timerClasse = 't-ok';
-  let timerMsg = `${mins} min`;
-  if (mins >= URGENT_MIN) timerClasse = 't-urg';
-  else if (mins >= ALERT_MIN) timerClasse = 't-med';
-
-  const progresso = Math.min(100, (mins / URGENT_MIN) * 100);
-  let progCor = 'var(--green)';
-  if (mins >= URGENT_MIN) progCor = 'var(--red)';
-  else if (mins >= ALERT_MIN) progCor = 'var(--accent)';
-
-  // Verifica se tem pagamento lançado ou pago na comanda
-  const temPagamento = p.pagamento && p.pagamento.trim() !== '';
-  const pagoNaComanda = p.pagoNaComanda === true;
-  const pagClass = pagoNaComanda ? 'badge-p' : (temPagamento ? 'badge-p' : 'badge-d');
-  const pagTxt = pagoNaComanda ? 'Pago na Comanda' : (temPagamento ? p.pagamento : 'Pendente');
-
-  let cls = 'card';
-  if (mins >= URGENT_MIN) cls += ' urgente';
-  else if (mins >= ALERT_MIN) cls += ' alerta';
-
-  // Renderiza itens com extras agrupados por nome
-  const itensAgrupados = agruparItens(p.itens);
-  const htmlItens = Object.values(itensAgrupados).map(item => {
-    let html = `<div class="item-ln">
+  const itensHtml = (p.itens||[]).map(it => {
+    const qty = it.qty || 1;
+    const addTexto = it.adicionais && it.adicionais.length
+      ? it.adicionais.map(a => `+${a.nome} (R$${a.preco.toFixed(2).replace('.',',')})`).join(' · ')
+      : '';
+    return `<div class="item-ln">
       <div class="item-top">
-        <span class="item-qtd">${item.qtd}x</span>
-        <span class="item-nm">${item.nome}</span>
-        <span class="item-vl">R$ ${item.total.toFixed(2).replace('.', ',')}</span>
-      </div>`;
-    
-    // Mostra os extras com valores se existirem
-    if (item.extras && item.extras.length > 0) {
-      const extrasHtml = item.extras.map(ex => 
-        `<div class="item-add">+ ${ex.nome} (R$ ${ex.preco.toFixed(2).replace('.', ',')})</div>`
-      ).join('');
-      html += extrasHtml;
-    }
-    
-    if (item.obs) html += `<div class="item-obs">Obs: ${item.obs}</div>`;
-    html += '</div>';
-    return html;
+        <span class="item-qtd">${qty}x</span>
+        <span class="item-nm">${it.nome}</span>
+        <span class="item-vl">R$ ${it.total.toFixed(2).replace('.',',')}</span>
+      </div>
+      ${addTexto ? `<div class="item-add">➕ ${addTexto}</div>` : ''}
+      ${it.obs ? `<div class="item-obs">⚠️ ${it.obs}</div>` : ''}
+    </div>`;
   }).join('');
 
-  // Botão de pagar na comanda
-  const btnPagarHtml = pagoNaComanda 
-    ? `<button class="btn-pagar-comanda pago" onclick="event.stopPropagation();">Pago na Comanda</button>`
-    : `<button class="btn-pagar-comanda" onclick="event.stopPropagation(); marcarPagoNaComanda('${p.id}')">💰 Pagar na Comanda</button>`;
-
-  return `<div class="${cls}" data-id="${p.id}">
+  return `<div class="card ${urgente?'urgente':alerta?'alerta':''}" id="card-${p.id}">
     <div class="card-top">
       <div>
         <div class="cli-nome">${p.nome}</div>
-        ${p.end ? `<div class="cli-end">${p.end}</div>` : ''}
-        ${p.tel ? `<div class="cli-tel">${p.tel}</div>` : ''}
+        ${p.endereco?`<div class="cli-end">📍 ${p.endereco}</div>`:''}
+        ${p.telefone?`<div class="cli-tel">📞 ${p.telefone}</div>`:''}
       </div>
-      <div class="badges">
-        <span class="badge ${p.tipo === 'delivery' ? 'badge-d' : ''}">${p.tipo === 'delivery' ? '🛵' : '✅'}</span>
-        <span class="badge ${pagClass}">${pagTxt}</span>
-      </div>
+      <div class="badges"><span class="badge ${tipoCls}">${tipoLbl}</span></div>
     </div>
-    <div class="card-itens">${htmlItens}</div>
+    <div class="card-itens">${itensHtml}</div>
     <div class="card-mid">
       <div class="timer-block">
-        <span class="timer-lbl-sm">Tempo</span>
-        <span class="timer-val ${timerClasse}">${timerMsg}</span>
+        <div class="timer-lbl-sm">Tempo</div>
+        <div class="timer-val ${timerCls}" data-inicio="${p.inicio}">${timerTxt}</div>
       </div>
       <div class="prog-wrap">
-        <div class="prog-label"><span>Início</span><span>60 min</span></div>
-        <div class="prog-track"><div class="prog-fill" style="width:${progresso}%;background:${progCor}"></div></div>
+        <div class="prog-label"><span>${metaLbl}</span><span>${pct}%</span></div>
+        <div class="prog-track"><div class="prog-fill" style="width:${pct}%;background:${barColor}"></div></div>
       </div>
-      <div class="pag-info">${p.pagamento || '—'}</div>
+      <div class="pag-info">${pagIcon} ${p.pagamento}</div>
     </div>
     <div class="card-bot">
       <div class="total-ln">
         <span class="total-lbl">Total</span>
-        <span class="total-num">R$ ${p.total.toFixed(2).replace('.', ',')}</span>
+        <span class="total-num">R$ ${p.total.toFixed(2).replace('.',',')}</span>
       </div>
-      ${btnPagarHtml}
-      <button class="btn-desp" onclick="despachar('${p.id}')">✅ Despachar</button>
+      <button class="btn-desp" onclick="despachar('${p.id}','${p.nome}')">✅ Despachar Pedido</button>
     </div>
   </div>`;
 }
-
-// Função para agrupar itens por nome (para não duplicar na comanda)
-function agruparItens(itens) {
-  if (!itens || !Array.isArray(itens)) return {};
-  
-  const agrupados = {};
-  itens.forEach(item => {
-    const key = item.id + '_' + (item.obs || '');
-    if (!agrupados[key]) {
-      agrupados[key] = {
-        id: item.id,
-        nome: item.nome,
-        qtd: 0,
-        preco: item.preco,
-        extras: [],
-        obs: item.obs,
-        total: 0
-      };
-    }
-    agrupados[key].qtd += item.qtd || 1;
-    
-    // Adiciona extras
-    if (item.extras && Array.isArray(item.extras)) {
-      item.extras.forEach(ex => {
-        const extKey = ex.id;
-        let extExistente = agrupados[key].extras.find(e => e.id === extKey);
-        if (!extExistente) {
-          agrupados[key].extras.push({...ex, qtd: item.qtd || 1});
-        }
-      });
-    }
-    
-    // Calcula o total (base + extras)
-    let extrasTotal = 0;
-    if (item.extras && Array.isArray(item.extras)) {
-      extrasTotal = item.extras.reduce((sum, ex) => sum + (ex.preco || 0), 0);
-    }
-    agrupados[key].total += (item.preco + extrasTotal) * (item.qtd || 1);
+setInterval(() => {
+  if (!document.getElementById('view-comandas').classList.contains('active')) return;
+  const agora = Date.now();
+  document.querySelectorAll('.timer-val[data-inicio]').forEach(el => {
+    const min = Math.floor((agora - +el.dataset.inicio) / 60000);
+    const urg = min >= URGENT_MIN, alt = min >= ALERT_MIN && !urg;
+    el.className = 'timer-val ' + (urg?'t-urg':alt?'t-med':'t-ok');
+    const h = Math.floor(min/60), m = min%60;
+    el.textContent = h>0 ? `${h}h${String(m).padStart(2,'0')}` : `${String(min).padStart(2,'0')}min`;
+    const card = document.getElementById('card-' + el.dataset.inicio); // fallback
   });
-  
-  return agrupados;
+}, 30000);
+async function despachar(id, nome) {
+  const p = pedidos[id]; if (!p) return;
+  const tempoMin = Math.floor((Date.now() - p.inicio) / 60000);
+  try {
+    await historicoRef.push({...p, despachado: Date.now(), tempoMin});
+    await pedidosRef.child(id).remove();
+    toast(`Pedido de ${nome} despachado! ✅`);
+  } catch(e) { toast('Erro: ' + e.message, true); }
 }
 
 // ══════════════════════════════════════════════
-// TIMER — atualizado a cada minuto
+// MENU — NOVO MODELO
 // ══════════════════════════════════════════════
-function atualizarTimers() {
-  // Não precisa mais atualizar de segundo em segundo
-  // O setInterval já atualiza a cada minuto
-  // Apenas re-renderiza os cards para mostrar o tempo correto
-  renderizar();
-}
+// instancias[uuid] = { xisId, adicionais:{adId:qty}, obs, basePreco }
+let instancias = {};
+let simpleQtds = {}; // id -> qty  (porções, bebidas)
+let instCounter = 0;
 
-// ══════════════════════════════════════════════
-// MARCAR PAGO NA COMANDA
-// ══════════════════════════════════════════════
-function marcarPagoNaComanda(pedidoId) {
-  if (!confirm('Marcar este pedido como pago na comanda?')) return;
-  
-  pedidosRef.child(pedidoId).update({
-    pagoNaComanda: true,
-    dataPagamentoNaComanda: firebase.database.ServerValue.TIMESTAMP
-  }).then(() => {
-    showToast('Pagamento registrado na comanda!');
-  }).catch(err => {
-    showToast('Erro ao registrar pagamento', true);
-    console.error(err);
-  });
-}
+function getTipo() { return document.querySelector('input[name="tipo"]:checked').value; }
 
-// ══════════════════════════════════════════════
-// DESPACHAR
-// ══════════════════════════════════════════════
-function despachar(id) {
-  if (!confirm('Confirmar despacho?')) return;
-  const p = pedidos[id];
-  if (!p) return;
+function renderMenu() {
+  const tipo = getTipo();
+  instancias = {}; simpleQtds = {}; instCounter = 0;
+  const box = document.getElementById('menu-box');
+  const xisItems = MENU[tipo].xis;
+  const adds = ADICIONAIS[tipo];
 
-  const historicoItem = {
-    ...p,
-    despachadoEm: firebase.database.ServerValue.TIMESTAMP,
-    criadoEm: p.criadoEm
-  };
-
-  historicoRef.push(historicoItem).then(() => {
-    pedidosRef.child(id).remove();
-    showToast('Pedido despachado!');
-  }).catch(err => {
-    showToast('Erro ao despachar', true);
-    console.error(err);
-  });
-}
-
-// ══════════════════════════════════════════════
-// LANÇAR PEDIDO
-// ══════════════════════════════════════════════
-// Carrinho de itens (agora agrupa itens iguais)
-let carrinho = [];
-
-function renderizarMenu() {
-  const tipo = document.querySelector('input[name="tipo"]:checked').value;
-  const menuBox = document.getElementById('menu-box');
-  const adicionais = ADICIONAIS[tipo];
-
-  let html = '';
-
-  // Xis
-  html += `<div class="cat-block"><div class="cat-title">🍔 Xis</div>`;
-  MENU[tipo].xis.forEach(item => {
-    html += `<div class="menu-item">
+  let html = `<div class="cat-block"><div class="cat-title">🍔 Xis Tradicionais</div>`;
+  xisItems.forEach(xi => {
+    html += `<div class="menu-item" id="mi-${xi.id}">
       <div class="menu-item-head">
         <div class="mi-info">
-          <div class="mi-nome">${item.nome}</div>
-          <div class="mi-desc">${item.desc}</div>
+          <div class="mi-nome">${xi.nome}</div>
+          <div class="mi-desc">${xi.desc}</div>
         </div>
-        <div class="mi-price">R$ ${item.preco.toFixed(2).replace('.', ',')}</div>
-        <button class="btn-add-item" onclick="adicionarItem('${item.id}', '${item.nome}', ${item.preco})">+</button>
+        <div class="mi-price">R$ ${xi.preco.toFixed(2).replace('.',',')}</div>
+        <button class="btn-add-item" onclick="addInstancia('${xi.id}')" title="Adicionar">+</button>
       </div>
+      <div class="instancias-wrap" id="inst-wrap-${xi.id}"></div>
     </div>`;
   });
-  html += '</div>';
+  html += `</div>`;
 
-  // Porções e Bebidas
+  // Simples
   MENU[tipo].simples.forEach(cat => {
     html += `<div class="cat-block"><div class="cat-title">${cat.cat}</div>`;
-    cat.itens.forEach(item => {
+    cat.itens.forEach(si => {
       html += `<div class="simple-item">
-        <div class="si-info">
-          <div class="si-nome">${item.nome}</div>
+        <div class="si-info"><div class="si-nome">${si.nome}</div></div>
+        <div class="si-price">R$ ${si.preco.toFixed(2).replace('.',',')}</div>
+        <div class="qty-ctrl">
+          <button class="qbtn" onclick="chSimple('${si.id}',-1)">−</button>
+          <span class="qnum" id="sq-${si.id}">0</span>
+          <button class="qbtn" onclick="chSimple('${si.id}',1)">+</button>
         </div>
-        <div class="si-price">R$ ${item.preco.toFixed(2).replace('.', ',')}</div>
-        <button class="btn-add-item" onclick="adicionarItem('${item.id}', '${item.nome}', ${item.preco})">+</button>
       </div>`;
     });
-    html += '</div>';
+    html += `</div>`;
   });
 
-  // Se já tem itens no carrinho, mostrar instâncias
-  if (carrinho.length > 0) {
-    html += renderizarCarrinho(tipo);
-  }
-
-  menuBox.innerHTML = html;
+  box.innerHTML = html;
+  calcTotal();
 }
 
-function renderizarCarrinho(tipo) {
-  const adicionais = ADICIONAIS[tipo];
-  let html = '<div class="cat-block"><div class="cat-title">📦 Seu Pedido</div>';
-  
-  // Agrupar itens por ID e OBS para显示数量
-  const itensAgrupados = {};
-  carrinho.forEach((item, idx) => {
-    const key = item.id + '_' + (item.obs || '');
-    if (!itensAgrupados[key]) {
-      itensAgrupados[key] = { ...item, qtd: 1, idxs: [idx] };
-    } else {
-      itensAgrupados[key].qtd++;
-      itensAgrupados[key].idxs.push(idx);
-    }
-  });
+function addInstancia(xisId) {
+  const tipo = getTipo();
+  const uid = 'inst_' + (++instCounter);
+  instancias[uid] = { xisId, adicionais: {}, obs: '' };
+  const adds = ADICIONAIS[tipo];
+  const wrap = document.getElementById('inst-wrap-' + xisId);
+  const div = document.createElement('div');
+  div.className = 'instancia';
+  div.id = 'inst-' + uid;
 
-  Object.values(itensAgrupados).forEach(item => {
-    const extrasTotal = item.extras ? item.extras.reduce((s, e) => s + e.preco, 0) : 0;
-    const totalItem = (item.preco + extrasTotal) * item.qtd;
-    
-    html += `<div class="instancia">
-      <div class="inst-head">
-        <span class="inst-num">${item.qtd}x ${item.nome}</span>
-        <span class="mi-price">R$ ${totalItem.toFixed(2).replace('.', ',')}</span>
-        <button class="inst-remove" onclick="removerItem('${item.id}', '${item.obs || ''}')">×</button>
-      </div>`;
-    
-    // Adicionais的选择
-    html += `<div class="adds-label">Adicionais (+R$)</div>
-      <div class="adds-grid">
-        ${adicionais.map(a => {
-          const isSel = item.extras && item.extras.some(e => e.id === a.id);
-          return `<button class="add-chip-btn ${isSel ? 'selected' : ''}" 
-            onclick="toggleExtra('${item.id}', '${item.obs || ''}', '${a.id}', '${a.nome}', ${a.preco})">
-            ${a.nome} (R$ ${a.preco.toFixed(2).replace('.', ',')})
-          </button>`;
-        }).join('')}
-      </div>`;
-    
-    // Observação
-    html += `<textarea class="obs-textarea" placeholder="Observação..." 
-      onchange="setarObs('${item.id}', '${item.obs || ''}', this.value)">${item.obs || ''}</textarea>`;
-    
-    html += '</div>';
-  });
+  const addsHtml = adds.map(a =>
+    `<button class="add-chip-btn" id="chip-${uid}-${a.id}" onclick="toggleAdd('${uid}','${a.id}')">
+      ${a.nome} <span style="font-size:11px;color:var(--muted)">+R$${a.preco.toFixed(2).replace('.',',')}</span>
+    </button>`
+  ).join('');
 
-  html += '</div>';
-  return html;
+  div.innerHTML = `
+    <div class="inst-head">
+      <span class="inst-num">#${instCounter}</span>
+      <button class="inst-remove" onclick="removeInstancia('${uid}','${xisId}')" title="Remover">×</button>
+    </div>
+    <div class="adds-label">Adicionais</div>
+    <div class="adds-grid">${addsHtml}</div>
+    <textarea class="obs-textarea" placeholder="Observações (sem cebola, bem passado...)"
+      oninput="instancias['${uid}'].obs=this.value;calcTotal()"></textarea>
+  `;
+  wrap.appendChild(div);
+  calcTotal();
 }
 
-// Alterado: agrupar itens iguais ao adicionar
-function adicionarItem(id, nome, preco) {
-  // Verifica se já existe um item igual (mesmo id e sem obs) no carrinho
-  const idx = carrinho.findIndex(item => item.id === id && !item.obs);
-  
-  if (idx !== -1) {
-    // Se existir, apenas aumenta a quantidade
-    carrinho[idx].qtd = (carrinho[idx].qtd || 1) + 1;
+function toggleAdd(uid, adId) {
+  const tipo = getTipo();
+  const adds = ADICIONAIS[tipo];
+  const add = adds.find(a => a.id === adId);
+  if (!add) return;
+  const inst = instancias[uid];
+  if (!inst) return;
+  if (inst.adicionais[adId]) {
+    delete inst.adicionais[adId];
+    document.getElementById(`chip-${uid}-${adId}`).classList.remove('selected');
   } else {
-    // Se não existir, adiciona novo
-    carrinho.push({ id, nome, preco, qtd: 1, extras: [] });
+    inst.adicionais[adId] = add;
+    document.getElementById(`chip-${uid}-${adId}`).classList.add('selected');
   }
-  
-  atualizarTotal();
-  renderizarMenu();
+  calcTotal();
 }
 
-function toggleExtra(itemId, obs, extraId, extraNome, extraPreco) {
-  const key = itemId + '_' + (obs || '');
-  const item = carrinho.find(i => i.id === itemId && (i.obs || '') === obs);
-  if (!item) return;
+function removeInstancia(uid, xisId) {
+  delete instancias[uid];
+  const el = document.getElementById('inst-' + uid);
+  if (el) el.remove();
+  calcTotal();
+}
 
-  if (!item.extras) item.extras = [];
-  
-  const extIdx = item.extras.findIndex(e => e.id === extraId);
-  if (extIdx >= 0) {
-    item.extras.splice(extIdx, 1);
-  } else {
-    item.extras.push({ id: extraId, nome: extraNome, preco: extraPreco });
+function chSimple(id, delta) {
+  simpleQtds[id] = Math.max(0, (simpleQtds[id]||0) + delta);
+  const el = document.getElementById('sq-' + id);
+  if (el) el.textContent = simpleQtds[id];
+  calcTotal();
+}
+
+function getSimplePreco(id) {
+  const tipo = getTipo();
+  for (const cat of MENU[tipo].simples)
+    for (const si of cat.itens)
+      if (si.id === id) return { preco: si.preco, nome: si.nome };
+  return null;
+}
+function getXisPreco(id) {
+  const tipo = getTipo();
+  for (const xi of MENU[tipo].xis) if (xi.id === id) return { preco: xi.preco, nome: xi.nome };
+  return null;
+}
+
+function calcTotal() {
+  let tot = 0;
+  for (const [uid, inst] of Object.entries(instancias)) {
+    const xi = getXisPreco(inst.xisId);
+    if (!xi) continue;
+    let sub = xi.preco;
+    for (const add of Object.values(inst.adicionais)) sub += add.preco;
+    tot += sub;
   }
-  
-  atualizarTotal();
-  renderizarMenu();
-}
-
-function setarObs(itemId, obs, texto) {
-  const item = carrinho.find(i => i.id === itemId && (i.obs || '') === obs);
-  if (!item) return;
-  item.obs = texto || null;
-}
-
-function removerItem(itemId, obs) {
-  const idx = carrinho.findIndex(i => i.id === itemId && (i.obs || '') === obs);
-  if (idx >= 0) {
-    if (carrinho[idx].qtd > 1) {
-      carrinho[idx].qtd--;
-    } else {
-      carrinho.splice(idx, 1);
-    }
+  for (const [id, qty] of Object.entries(simpleQtds)) {
+    if (qty <= 0) continue;
+    const si = getSimplePreco(id);
+    if (si) tot += si.preco * qty;
   }
-  atualizarTotal();
-  renderizarMenu();
+  document.getElementById('total-val').textContent = 'R$ ' + tot.toFixed(2).replace('.',',');
 }
 
-function atualizarTotal() {
-  let total = 0;
-  carrinho.forEach(item => {
-    let extrasTotal = item.extras ? item.extras.reduce((s, e) => s + e.preco, 0) : 0;
-    total += (item.preco + extrasTotal) * (item.qtd || 1);
-  });
-  document.getElementById('total-val').textContent = 'R$ ' + total.toFixed(2).replace('.', ',');
-}
+document.querySelectorAll('input[name="tipo"]').forEach(r => r.addEventListener('change', renderMenu));
 
-// Listener tipo
-document.querySelectorAll('input[name="tipo"]').forEach(r => {
-  r.addEventListener('change', () => {
-    carrinho = [];
-    renderizarMenu();
-    atualizarTotal();
-  });
-});
-
-function lancar() {
+async function lancar() {
   const nome = document.getElementById('f-nome').value.trim();
-  if (!nome) { showToast('Nome obrigatório', true); return; }
-  if (carrinho.length === 0) { showToast('Adicione itens', true); return; }
+  const pag  = document.getElementById('f-pag').value;
+  const tipo = getTipo();
+  if (!nome) { toast('Informe o nome do cliente!', true); return; }
+  if (!pag)  { toast('Selecione a forma de pagamento!', true); return; }
 
-  const tipo = document.querySelector('input[name="tipo"]:checked').value;
-  const tel = document.getElementById('f-tel').value.trim();
-  const end = document.getElementById('f-end').value.trim();
-  const pag = document.getElementById('f-pag').value;
-
+  const itens = [];
   let total = 0;
-  // Cria cópia do carrinho com todos os detalhes (para preservar extras de cada instance)
-  const itensParaSalvar = [];
-  carrinho.forEach(item => {
-    let extrasTotal = item.extras ? item.extras.reduce((s, e) => s + e.preco, 0) : 0;
-    total += (item.preco + extrasTotal) * (item.qtd || 1);
-    
-    // Salva cada unidade como item separado para manter extras corretos
-    for (let i = 0; i < (item.qtd || 1); i++) {
-      itensParaSalvar.push({
-        id: item.id,
-        nome: item.nome,
-        preco: item.preco,
-        qtd: 1,
-        extras: item.extras ? [...item.extras] : [],
-        obs: item.obs || null
-      });
-    }
-  });
 
-  const novoPedido = {
-    nome, tel: tel || null, end: end || null,
-    tipo, pagamento: pag || null,
-    itens: itensParaSalvar,
-    total,
-    criadoEm: firebase.database.ServerValue.TIMESTAMP,
-    pagoNaComanda: false
-  };
+  for (const [uid, inst] of Object.entries(instancias)) {
+    const xi = getXisPreco(inst.xisId);
+    if (!xi) continue;
+    let sub = xi.preco;
+    const adsList = Object.values(inst.adicionais);
+    for (const a of adsList) sub += a.preco;
+    itens.push({ nome: xi.nome, adicionais: adsList, obs: inst.obs, total: sub });
+    total += sub;
+  }
+  for (const [id, qty] of Object.entries(simpleQtds)) {
+    if (qty <= 0) continue;
+    const si = getSimplePreco(id);
+    if (si) { itens.push({ nome: si.nome, qty, adicionais:[], obs:'', total: si.preco * qty }); total += si.preco * qty; }
+  }
+  if (!itens.length) { toast('Adicione ao menos um item!', true); return; }
 
-  pedidosRef.push(novoPedido).then(() => {
-    showToast('Pedido lançado!');
-    // Limpar form
+  const btn = document.getElementById('btn-lancar');
+  btn.disabled = true; btn.textContent = 'Enviando...';
+  try {
+    await pedidosRef.push({
+      nome, telefone: document.getElementById('f-tel').value.trim(),
+      endereco: document.getElementById('f-end').value.trim(),
+      pagamento: pag, tipo, itens, total, inicio: Date.now()
+    });
+    toast('Pedido lançado! 🚀');
     document.getElementById('f-nome').value = '';
-    document.getElementById('f-tel').value = '';
-    document.getElementById('f-end').value = '';
-    document.getElementById('f-pag').value = '';
-    carrinho = [];
-    atualizarTotal();
-    renderizarMenu();
-    switchTab('comandas');
-  }).catch(err => {
-    showToast('Erro ao lançar', true);
-    console.error(err);
-  });
+    document.getElementById('f-tel').value  = '';
+    document.getElementById('f-end').value  = '';
+    document.getElementById('f-pag').value  = '';
+    renderMenu();
+  } catch(e) { toast('Erro: ' + e.message, true); }
+  btn.disabled = false; btn.textContent = '🚀 Lançar na Comanda';
 }
 
 // ══════════════════════════════════════════════
 // HISTÓRICO
 // ══════════════════════════════════════════════
-function renderizarHistorico() {
-  const container = document.getElementById('hist-lista');
-  const hoje = new Date();
-  hoje.setHours(0,0,0,0);
-
-  const deHoje = Object.values(historico).filter(p => {
-    if (!p.despachadoEm) return false;
-    const d = new Date(p.despachadoEm);
-    d.setHours(0,0,0,0);
-    return d.getTime() === hoje.getTime();
-  }).sort((a,b) => b.despachadoEm - a.despachadoEm);
-
-  if (!deHoje.length) {
-    container.innerHTML = '<div style="color:var(--muted);text-align:center;padding:1rem;">Nenhum pedido despachado hoje</div>';
-    return;
-  }
-
-  container.innerHTML = deHoje.map(p => `
-    <div class="hist-item">
-      <span class="h-nome">${p.nome}</span>
-      <span class="h-tempo">${new Date(p.despachadoEm).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}</span>
-      <span class="h-total">R$ ${p.total.toFixed(2).replace('.', ',')}</span>
-    </div>
-  `).join('');
+function renderHistorico() {
+  const hoje = new Date().toDateString();
+  const lista = Object.values(historico)
+    .filter(h => new Date(h.despachado).toDateString() === hoje)
+    .sort((a,b) => b.despachado - a.despachado);
+  const el = document.getElementById('hist-lista');
+  if (!el) return;
+  if (!lista.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px 0">Nenhum ainda hoje.</div>'; return; }
+  el.innerHTML = lista.map(h => {
+    const hora = new Date(h.despachado).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    return `<div class="hist-item">
+      <span class="h-nome">${h.nome}</span>
+      <span>${h.tipo==='delivery'?'🛵':'✅'}</span>
+      <span class="h-tempo">${h.tempoMin}min · ${hora}</span>
+      <span class="h-total">R$ ${h.total.toFixed(2).replace('.',',')}</span>
+    </div>`;
+  }).join('');
 }
 
 // ══════════════════════════════════════════════
 // RELATÓRIO
 // ══════════════════════════════════════════════
-// Setas datas padrão: hoje
-(function() {
-  const hoje = new Date();
-  const fmt = d => d.toISOString().split('T')[0];
-  document.getElementById('rel-data-ini').value = fmt(hoje);
-  document.getElementById('rel-data-fim').value = fmt(hoje);
-})();
+function setDefaultDates() {
+  const hoje = new Date().toISOString().split('T')[0];
+  document.getElementById('rel-data-ini').value = hoje;
+  document.getElementById('rel-data-fim').value = hoje;
+}
 
 function gerarRelatorio() {
-  const ini = document.getElementById('rel-data-ini').value;
-  const fim = document.getElementById('rel-data-fim').value;
-  if (!ini || !fim) { showToast('Selecione as datas', true); return; }
+  const ini = new Date(document.getElementById('rel-data-ini').value + 'T00:00:00');
+  const fim = new Date(document.getElementById('rel-data-fim').value + 'T23:59:59');
+  if (isNaN(ini) || isNaN(fim)) { toast('Selecione as datas!', true); return; }
 
-  const itens = Object.values(historico).filter(p => {
-    if (!p.despachadoEm) return false;
-    const d = new Date(p.despachadoEm);
-    const di = new Date(ini + 'T00:00:00');
-    const df = new Date(fim + 'T23:59:59');
-    return d >= di && d <= df;
-  });
+  const lista = Object.values(historico).filter(h => {
+    const d = new Date(h.despachado);
+    return d >= ini && d <= fim;
+  }).sort((a,b) => a.despachado - b.despachado);
 
-  if (!itens.length) {
-    showToast('Nenhum pedido no período', true);
+  if (!lista.length) {
     document.getElementById('rel-resultado').style.display = 'none';
+    toast('Nenhum pedido no período!', true);
     return;
   }
 
-  document.getElementById('rel-resultado').style.display = 'block';
-  document.getElementById('print-periodo').textContent = `${ini} a ${fim}`;
+  const fmtDate = d => d.toLocaleDateString('pt-BR');
+  const periodoTxt = ini.toDateString() === fim.toDateString()
+    ? fmtDate(ini) : `${fmtDate(ini)} a ${fmtDate(fim)}`;
+  document.getElementById('print-periodo').textContent = `Período: ${periodoTxt}`;
 
-  // Stats
-  const totalGeral = itens.reduce((s, p) => s + p.total, 0);
-  const totalPedidos = itens.length;
-  const ticketMedio = totalGeral / totalPedidos;
+  const totalGeral = lista.reduce((s,h) => s+h.total, 0);
+  const tempoMedio = lista.reduce((s,h) => s+(h.tempoMin||0), 0) / lista.length;
+  const deliveries = lista.filter(h=>h.tipo==='delivery').length;
+  const proprios   = lista.filter(h=>h.tipo==='proprio').length;
 
   document.getElementById('rel-stats').innerHTML = `
-    <div class="rel-stat"><div class="rel-stat-val">${totalPedidos}</div><div class="rel-stat-lbl">Pedidos</div></div>
-    <div class="rel-stat"><div class="rel-stat-val">R$ ${totalGeral.toFixed(2).replace('.', ',')}</div><div class="rel-stat-lbl">Total</div></div>
-    <div class="rel-stat"><div class="rel-stat-val">R$ ${ticketMedio.toFixed(2).replace('.', ',')}</div><div class="rel-stat-lbl">Ticket Médio</div></div>
+    <div class="rel-stat"><div class="rel-stat-val">${lista.length}</div><div class="rel-stat-lbl">Pedidos</div></div>
+    <div class="rel-stat"><div class="rel-stat-val">R$ ${totalGeral.toFixed(2).replace('.',',')}</div><div class="rel-stat-lbl">Total</div></div>
+    <div class="rel-stat"><div class="rel-stat-val">${Math.round(tempoMedio)}min</div><div class="rel-stat-lbl">Tempo Médio</div></div>
+    <div class="rel-stat"><div class="rel-stat-val">${deliveries}</div><div class="rel-stat-lbl">Deliveries</div></div>
+    <div class="rel-stat"><div class="rel-stat-val">${proprios}</div><div class="rel-stat-lbl">Próprias</div></div>
+    <div class="rel-stat"><div class="rel-stat-val">R$ ${(totalGeral/lista.length).toFixed(2).replace('.',',')}</div><div class="rel-stat-lbl">Ticket Médio</div></div>
   `;
 
   // Por pagamento
   const porPag = {};
-  itens.forEach(p => {
-    const pg = p.pagamento || 'Não informado';
-    porPag[pg] = (porPag[pg] || 0) + p.total;
-  });
+  lista.forEach(h => { porPag[h.pagamento] = (porPag[h.pagamento]||0) + h.total; });
+  const pagRows = Object.entries(porPag).sort((a,b)=>b[1]-a[1]).map(([pag,val]) =>
+    `<tr><td>${pag}</td><td class="td-right">${lista.filter(h=>h.pagamento===pag).length}x</td><td class="td-right td-bold">R$ ${val.toFixed(2).replace('.',',')}</td></tr>`
+  ).join('');
   document.getElementById('rel-pagamentos').innerHTML = `
-    <table class="rel-table"><thead><tr><th>Forma</th><th class="td-right">Valor</th></tr></thead>
-    <tbody>${Object.entries(porPag).map(([k,v]) => `<tr><td>${k}</td><td class="td-right td-bold">R$ ${v.toFixed(2).replace('.', ',')}</td></tr>`).join('')}</tbody></table>
-  `;
+    <table class="rel-table">
+      <tr><th>Forma</th><th class="td-right">Qtd</th><th class="td-right">Total</th></tr>
+      ${pagRows}
+    </table>`;
 
   // Itens mais vendidos
-  const contItens = {};
-  itens.forEach(p => {
-    (p.itens || []).forEach(i => {
-      contItens[i.nome] = (contItens[i.nome] || 0) + (i.qtd || 1);
+  const porItem = {};
+  lista.forEach(h => {
+    (h.itens||[]).forEach(it => {
+      const key = it.nome;
+      if (!porItem[key]) porItem[key] = { qty:0, total:0 };
+      porItem[key].qty += (it.qty||1);
+      porItem[key].total += it.total;
     });
   });
-  const topItens = Object.entries(contItens).sort((a,b) => b[1] - a[1]).slice(0,10);
+  const itemRows = Object.entries(porItem).sort((a,b)=>b[1].qty-a[1].qty).map(([nome,v]) =>
+    `<tr><td>${nome}</td><td class="td-right">${v.qty}x</td><td class="td-right td-bold">R$ ${v.total.toFixed(2).replace('.',',')}</td></tr>`
+  ).join('');
   document.getElementById('rel-itens').innerHTML = `
-    <table class="rel-table"><thead><tr><th>Item</th><th class="td-right">Qtd</th></tr></thead>
-    <tbody>${topItens.map(([k,v]) => `<tr><td>${k}</td><td class="td-right td-bold">${v}</td></tr>`).join('')}</tbody></table>
-  `;
+    <table class="rel-table">
+      <tr><th>Item</th><th class="td-right">Qtd</th><th class="td-right">Total</th></tr>
+      ${itemRows}
+    </table>`;
 
-  // Todos pedidos
+  // Todos os pedidos
+  const pedRows = lista.map(h => {
+    const hora = new Date(h.despachado).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    const data = new Date(h.despachado).toLocaleDateString('pt-BR');
+    const tipo = h.tipo==='delivery'?'🛵':'✅';
+    return `<tr>
+      <td>${data} ${hora}</td>
+      <td>${h.nome}</td>
+      <td>${tipo} ${h.pagamento}</td>
+      <td class="td-right">${h.tempoMin||'?'}min</td>
+      <td class="td-right td-bold">R$ ${h.total.toFixed(2).replace('.',',')}</td>
+    </tr>`;
+  }).join('');
   document.getElementById('rel-pedidos').innerHTML = `
-    <table class="rel-table"><thead><tr><th>Data/Hora</th><th>Cliente</th><th>Itens</th><th class="td-right">Total</th></tr></thead>
-    <tbody>${itens.sort((a,b) => b.despachadoEm - a.despachadoEm).map(p => {
-      const dt = new Date(p.despachadoEm);
-      const itensTxt = (p.itens || []).map(i => i.nome).join(', ');
-      return `<tr>
-        <td>${dt.toLocaleDateString('pt-BR')} ${dt.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}</td>
-        <td>${p.nome}</td>
-        <td>${itensTxt}</td>
-        <td class="td-right td-bold">R$ ${p.total.toFixed(2).replace('.', ',')}</td>
-      </tr>`;
-    }).join('')}</tbody></table>
-  `;
+    <table class="rel-table">
+      <tr><th>Data/Hora</th><th>Cliente</th><th>Tipo / Pag.</th><th class="td-right">Tempo</th><th class="td-right">Total</th></tr>
+      ${pedRows}
+      <tr style="border-top:2px solid var(--border2)">
+        <td colspan="4" style="font-weight:700;color:var(--muted)">TOTAL GERAL</td>
+        <td class="td-right td-bold">R$ ${totalGeral.toFixed(2).replace('.',',')}</td>
+      </tr>
+    </table>`;
+
+  document.getElementById('rel-resultado').style.display = 'block';
+  toast('Relatório gerado!');
 }
 
 function imprimirPDF() {
+  const res = document.getElementById('rel-resultado');
+  if (res.style.display === 'none' || !res.innerHTML.trim()) {
+    toast('Gere o relatório primeiro!', true); return;
+  }
   window.print();
 }
+
+// ══════════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════════
+function toast(msg, err=false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (err?' err':'');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ══════════════════════════════════════════════
+// BOOT
+// ══════════════════════════════════════════════
+window.addEventListener('load', () => {
+  const cfg = getConfig();
+  if (!cfg) { hideLoading(); document.getElementById('setup-screen').style.display = 'flex'; }
+  else initFirebase(cfg);
+});
 </script>
 </body>
 </html>
