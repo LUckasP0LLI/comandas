@@ -449,27 +449,61 @@ body{
 /* ════════════════════════════════════════════
    PRINT / PDF
    ════════════════════════════════════════════ */
+/* Painel de impressão de comanda — oculto na tela, aparece só no print */
+#comanda-print{display:none;}
+
 @media print{
   body{background:#fff;color:#111;font-size:12px;}
-  .header,.bottom-nav,.toolbar,
-  .view:not(#view-relatorio),
-  .rel-controls,#view-relatorio .btn-gerar,#view-relatorio .btn-pdf,
-  .hist-section{display:none!important;}
-  #view-relatorio{display:block!important;padding:0;}
-  .view{padding-bottom:0!important;}
-  .rel-wrap{max-width:100%;}
-  .rel-heading{color:#b8860b;font-size:22px;}
-  .rel-card{border:1px solid #ccc;border-radius:0;margin-bottom:12px;padding:12px;break-inside:avoid;}
-  .rel-subtitle{color:#b8860b;font-size:16px;}
-  .rel-stat{background:#f5f5f5;border:1px solid #ddd;}
-  .rel-stat-val{color:#b8860b;font-size:20px;}
-  .rel-stat-lbl{color:#555;}
-  .rel-table{min-width:auto;}
-  .rel-table th{color:#555;}
-  .rel-table td{color:#111;white-space:normal;}
-  .rel-table .td-bold{color:#b8860b;}
-  #rel-resultado{display:block!important;}
-  .print-header{display:block!important;}
+
+  /* Modo relatório */
+  body.print-relatorio .header,
+  body.print-relatorio .bottom-nav,
+  body.print-relatorio .toolbar,
+  body.print-relatorio .view,
+  body.print-relatorio .rel-controls,
+  body.print-relatorio #view-relatorio .btn-gerar,
+  body.print-relatorio #view-relatorio .btn-pdf,
+  body.print-relatorio .hist-section,
+  body.print-relatorio #comanda-print{display:none!important;}
+  body.print-relatorio #view-relatorio{display:block!important;padding:0;}
+  body.print-relatorio .view{padding-bottom:0!important;}
+  body.print-relatorio .rel-wrap{max-width:100%;}
+  body.print-relatorio .rel-heading{color:#b8860b;font-size:22px;}
+  body.print-relatorio .rel-card{border:1px solid #ccc;border-radius:0;margin-bottom:12px;padding:12px;break-inside:avoid;}
+  body.print-relatorio .rel-subtitle{color:#b8860b;font-size:16px;}
+  body.print-relatorio .rel-stat{background:#f5f5f5;border:1px solid #ddd;}
+  body.print-relatorio .rel-stat-val{color:#b8860b;font-size:20px;}
+  body.print-relatorio .rel-stat-lbl{color:#555;}
+  body.print-relatorio .rel-table{min-width:auto;}
+  body.print-relatorio .rel-table th{color:#555;}
+  body.print-relatorio .rel-table td{color:#111;white-space:normal;}
+  body.print-relatorio .rel-table .td-bold{color:#b8860b;}
+  body.print-relatorio #rel-resultado{display:block!important;}
+  body.print-relatorio .print-header{display:block!important;}
+
+  /* Modo comanda */
+  body.print-comanda .header,
+  body.print-comanda .bottom-nav,
+  body.print-comanda #app > .view,
+  body.print-comanda .toast{display:none!important;}
+  body.print-comanda #comanda-print{
+    display:block!important;
+    font-family:'Courier New',monospace;
+    font-size:13px;color:#111;
+    max-width:360px;margin:0 auto;padding:16px;
+  }
+  body.print-comanda .cp-logo{font-size:22px;font-weight:900;text-align:center;letter-spacing:3px;margin-bottom:2px;}
+  body.print-comanda .cp-sub{text-align:center;font-size:11px;color:#555;margin-bottom:8px;}
+  body.print-comanda .cp-sep{border:none;border-top:1px dashed #999;margin:8px 0;}
+  body.print-comanda .cp-row{display:flex;justify-content:space-between;margin:3px 0;font-size:12px;}
+  body.print-comanda .cp-lbl{color:#555;}
+  body.print-comanda .cp-items-title{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#555;margin-bottom:5px;}
+  body.print-comanda .cp-item{margin:5px 0;}
+  body.print-comanda .cp-item-main{display:flex;justify-content:space-between;font-weight:600;}
+  body.print-comanda .cp-item-detail{font-size:11px;color:#555;padding-left:10px;margin-top:1px;}
+  body.print-comanda .cp-frete{display:flex;justify-content:space-between;font-size:12px;color:#555;margin-top:4px;}
+  body.print-comanda .cp-total{display:flex;justify-content:space-between;font-weight:900;font-size:16px;margin-top:6px;padding-top:6px;border-top:2px solid #111;}
+  body.print-comanda .cp-footer{text-align:center;font-size:11px;color:#888;margin-top:14px;}
 }
 .print-header{display:none;text-align:center;margin-bottom:1.5rem;border-bottom:2px solid #b8860b;padding-bottom:12px;}
 .print-header h1{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:2px;color:#b8860b;}
@@ -734,6 +768,9 @@ body{
     </div>
   </div>
 </div><!-- /app -->
+
+<!-- Painel de impressão de comanda (oculto, aparece só no print) -->
+<div id="comanda-print"></div>
 
 <!-- BOTTOM NAV (mobile) -->
 <nav class="bottom-nav" id="bottom-nav">
@@ -1114,65 +1151,41 @@ function imprimirComanda(id) {
   const tipoLbl = p.tipo === 'delivery' ? '🛵 Delivery' : '✅ Entrega Própria';
   const totalComFrete = (p.total||0) + (p.frete||0);
 
-  const itensStr = (p.itens||[]).map(it => {
-    const qty = it.qty || 1;
-    let linha = `${qty}x ${it.nome} — R$ ${(+it.total).toFixed(2).replace('.',',')}`;
-    if (it.adicionais && it.adicionais.length) {
-      linha += `\n   ➕ ${it.adicionais.map(a=>a.nome).join(', ')}`;
-    }
-    if (it.obs) linha += `\n   ⚠️ ${it.obs}`;
-    return linha;
-  }).join('\n');
+  const itensHtml = (p.itens||[]).map(it => {
+    const qty = it.qty||1;
+    const adds = it.adicionais&&it.adicionais.length
+      ? `<div class="cp-item-detail">➕ ${it.adicionais.map(a=>a.nome).join(', ')}</div>` : '';
+    const obs = it.obs ? `<div class="cp-item-detail">⚠️ ${it.obs}</div>` : '';
+    return `<div class="cp-item">
+      <div class="cp-item-main"><span>${qty}x ${it.nome}</span><span>R$ ${(+it.total).toFixed(2).replace('.',',')}</span></div>
+      ${adds}${obs}
+    </div>`;
+  }).join('');
 
-  const freteStr = (p.tipo==='proprio' && p.frete>0)
-    ? `\nFrete: R$ ${(+p.frete).toFixed(2).replace('.',',')}` : '';
+  const freteHtml = (p.tipo==='proprio' && p.frete>0)
+    ? `<div class="cp-frete"><span>🚗 Frete</span><span>R$ ${(+p.frete).toFixed(2).replace('.',',')}</span></div>` : '';
 
-  const win = window.open('', '_blank', 'width=400,height=600');
-  win.document.write(`<!DOCTYPE html><html><head>
-    <meta charset="UTF-8">
-    <title>Comanda — ${p.nome}</title>
-    <style>
-      *{box-sizing:border-box;margin:0;padding:0;}
-      body{font-family:'Courier New',monospace;font-size:13px;padding:20px;color:#111;background:#fff;max-width:380px;}
-      .logo{font-size:20px;font-weight:900;text-align:center;letter-spacing:2px;margin-bottom:4px;}
-      .sep{border:none;border-top:1px dashed #999;margin:10px 0;}
-      .row{display:flex;justify-content:space-between;margin:4px 0;}
-      .label{color:#555;font-size:11px;}
-      .item{margin:6px 0;}
-      .item-main{display:flex;justify-content:space-between;}
-      .item-detail{color:#555;font-size:11px;padding-left:12px;margin-top:2px;}
-      .total-row{display:flex;justify-content:space-between;font-weight:900;font-size:15px;margin-top:6px;}
-      .frete-row{display:flex;justify-content:space-between;font-size:12px;color:#555;}
-      .footer{text-align:center;font-size:11px;color:#888;margin-top:16px;}
-      @media print{body{padding:8px;}}
-    </style>
-  </head><body>
-    <div class="logo">🍔 XIS</div>
-    <div style="text-align:center;font-size:11px;color:#555;">${data} às ${hora}</div>
-    <hr class="sep">
-    <div class="row"><span class="label">Cliente</span><span><b>${p.nome}</b></span></div>
-    ${p.telefone?`<div class="row"><span class="label">Telefone</span><span>${p.telefone}</span></div>`:''}
-    ${p.endereco?`<div class="row"><span class="label">Endereço</span><span style="text-align:right;max-width:220px">${p.endereco}</span></div>`:''}
-    <div class="row"><span class="label">Tipo</span><span>${tipoLbl}</span></div>
-    <div class="row"><span class="label">Pagamento</span><span>${p.pagamento}</span></div>
-    <hr class="sep">
-    <div class="label" style="margin-bottom:6px;">ITENS</div>
-    ${(p.itens||[]).map(it => {
-      const qty = it.qty||1;
-      const adds = it.adicionais&&it.adicionais.length ? `<div class="item-detail">➕ ${it.adicionais.map(a=>a.nome).join(', ')}</div>` : '';
-      const obs  = it.obs ? `<div class="item-detail">⚠️ ${it.obs}</div>` : '';
-      return `<div class="item">
-        <div class="item-main"><span>${qty}x ${it.nome}</span><span>R$ ${(+it.total).toFixed(2).replace('.',',')}</span></div>
-        ${adds}${obs}
-      </div>`;
-    }).join('')}
-    <hr class="sep">
-    ${p.frete>0?`<div class="frete-row"><span>🚗 Frete</span><span>R$ ${(+p.frete).toFixed(2).replace('.',',')}</span></div>`:''}
-    <div class="total-row"><span>TOTAL</span><span>R$ ${totalComFrete.toFixed(2).replace('.',',')}</span></div>
-    <div class="footer">Obrigado pela preferência! 🍔</div>
-    <script>window.onload=()=>{window.print();window.onafterprint=()=>window.close();}<\/script>
-  </body></html>`);
-  win.document.close();
+  document.getElementById('comanda-print').innerHTML = `
+    <div class="cp-logo">🍔 XIS</div>
+    <div class="cp-sub">${data} às ${hora}</div>
+    <hr class="cp-sep">
+    <div class="cp-row"><span class="cp-lbl">Cliente</span><span><b>${p.nome}</b></span></div>
+    ${p.telefone?`<div class="cp-row"><span class="cp-lbl">Telefone</span><span>${p.telefone}</span></div>`:''}
+    ${p.endereco?`<div class="cp-row"><span class="cp-lbl">Endereço</span><span>${p.endereco}</span></div>`:''}
+    <div class="cp-row"><span class="cp-lbl">Tipo</span><span>${tipoLbl}</span></div>
+    <div class="cp-row"><span class="cp-lbl">Pagamento</span><span>${p.pagamento}</span></div>
+    <hr class="cp-sep">
+    <div class="cp-items-title">Itens</div>
+    ${itensHtml}
+    <hr class="cp-sep">
+    ${freteHtml}
+    <div class="cp-total"><span>TOTAL</span><span>R$ ${totalComFrete.toFixed(2).replace('.',',')}</span></div>
+    <div class="cp-footer">Obrigado pela preferência! 🍔</div>
+  `;
+
+  document.body.classList.add('print-comanda');
+  window.print();
+  document.body.classList.remove('print-comanda');
 }
 
 // ══════════════════════════════════════════════
@@ -1511,7 +1524,9 @@ function imprimirPDF() {
   if (res.style.display === 'none' || !res.innerHTML.trim()) {
     toast('Gere o relatório primeiro!', true); return;
   }
+  document.body.classList.add('print-relatorio');
   window.print();
+  document.body.classList.remove('print-relatorio');
 }
 
 // ══════════════════════════════════════════════
