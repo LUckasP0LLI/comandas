@@ -690,7 +690,7 @@ body{
           <div class="fgroup"><label>Nome *</label><input id="f-nome" placeholder="Ex: João Silva"></div>
           <div class="fgroup"><label>Telefone</label><input id="f-tel" placeholder="(51) 9 9999-9999"></div>
           <div class="fgroup full"><label>Endereço</label><input id="f-end" placeholder="Rua, Nº, Bairro — deixe em branco p/ retirada"></div>
-          <div class="fgroup" id="frete-field" style="display:none;">
+          <div class="fgroup" id="frete-field">
             <label>Taxa de Entrega (R$)</label>
             <input type="number" id="f-frete" placeholder="0,00" min="0" step="0.50">
           </div>
@@ -1032,14 +1032,10 @@ function renderComandas() {
 }
 function buildCard(p, agora) {
   const min = Math.floor((agora - p.inicio) / 60000);
-  const pct = Math.min(100, Math.round(min / URGENT_MIN * 100));
   const urgente = min >= URGENT_MIN, alerta = min >= ALERT_MIN && !urgente;
   const timerCls = urgente?'t-urg':alerta?'t-med':'t-ok';
-  const barColor = urgente?'var(--red)':alerta?'var(--accent)':'var(--green)';
   const h = Math.floor(min/60), m = min%60;
   const timerTxt = h>0 ? `${h}h${String(m).padStart(2,'0')}` : `${String(min).padStart(2,'0')}min`;
-  const metaLbl = urgente?'⚠️ ATRASADO':alerta?'Atenção':'Em preparo';
-  const pagIcon = {Pix:'💠',Dinheiro:'💵','Cartão de Crédito':'💳','Cartão de Débito':'💳'}[p.pagamento]||'💳';
   const tipoCls = p.tipo==='delivery'?'badge-d':'badge-p';
   const tipoLbl = p.tipo==='delivery'?'🛵 Delivery':'✅ Própria';
   const isPago = p.pago === true;
@@ -1048,7 +1044,7 @@ function buildCard(p, agora) {
   const itensHtml = (p.itens||[]).map(it => {
     const qty = it.qty || 1;
     const addTexto = it.adicionais && it.adicionais.length
-      ? it.adicionais.map(a => `+${a.nome} (R$${(+a.preco).toFixed(2).replace('.',',')})`).join(' · ')
+      ? it.adicionais.map(a => `+${a.nome}`).join(', ')
       : '';
     return `<div class="item-ln">
       <div class="item-top">
@@ -1061,18 +1057,17 @@ function buildCard(p, agora) {
     </div>`;
   }).join('');
 
-  const freteHtml = (p.tipo === 'proprio' && p.frete > 0)
+  const freteHtml = (p.frete > 0)
     ? `<div style="display:flex;justify-content:space-between;margin-top:4px;padding-top:6px;border-top:1px dashed var(--border2)">
         <span style="font-size:12px;color:var(--muted)">🚗 Frete</span>
         <span style="font-size:12px;color:var(--accent);font-weight:600">R$ ${(+p.frete).toFixed(2).replace('.',',')}</span>
        </div>` : '';
 
-  // Only show payment confirmation for entrega própria
   const pagoHtml = p.tipo === 'proprio' ? `
     <div class="pago-row">
       <label class="pago-toggle ${isPago?'checked':''}" onclick="togglePago('${p.id}',${isPago})">
         <div class="pago-box">${isPago?'✓':''}</div>
-        ${isPago ? '<span>✅ Pagamento confirmado</span>' : '<span>Confirmar pagamento recebido</span>'}
+        ${isPago ? '<span>✅ Pago</span>' : '<span>Confirmar pagamento</span>'}
       </label>
     </div>` : '';
 
@@ -1083,26 +1078,18 @@ function buildCard(p, agora) {
         ${p.telefone?`<div class="cli-tel">📞 ${p.telefone}</div>`:''}
         ${p.endereco?`<div class="cli-end">📍 ${p.endereco}</div>`:''}
       </div>
-      <div class="badges"><span class="badge ${tipoCls}">${tipoLbl}</span></div>
+      <div class="badges">
+        <span class="badge ${tipoCls}">${tipoLbl}</span>
+        <span class="timer-val ${timerCls}" data-inicio="${p.inicio}" style="font-size:15px;letter-spacing:1px;">${timerTxt}</span>
+      </div>
     </div>
     <div class="card-itens">
       ${itensHtml}
       ${freteHtml}
     </div>
-    <div class="card-mid">
-      <div class="timer-block">
-        <div class="timer-lbl-sm">Tempo</div>
-        <div class="timer-val ${timerCls}" data-inicio="${p.inicio}">${timerTxt}</div>
-      </div>
-      <div class="prog-wrap">
-        <div class="prog-label"><span>${metaLbl}</span><span>${pct}%</span></div>
-        <div class="prog-track"><div class="prog-fill" style="width:${pct}%;background:${barColor}"></div></div>
-      </div>
-      <div class="pag-info">${pagIcon} ${p.pagamento}</div>
-    </div>
     <div class="card-bot">
       <div class="total-ln">
-        <span class="total-lbl">Total${p.frete>0?' (c/ frete)':''}</span>
+        <span class="total-lbl">Total${p.frete>0?' c/ frete':''}</span>
         <span class="total-num">R$ ${totalComFrete.toFixed(2).replace('.',',')}</span>
       </div>
       <button class="btn-desp" onclick="despachar('${p.id}','${p.nome}')">✅ Despachar Pedido</button>
@@ -1162,7 +1149,7 @@ function imprimirComanda(id) {
     </div>`;
   }).join('');
 
-  const freteHtml = (p.tipo==='proprio' && p.frete>0)
+  const freteHtml = (p.frete>0)
     ? `<div class="cp-frete"><span>🚗 Frete</span><span>R$ ${(+p.frete).toFixed(2).replace('.',',')}</span></div>` : '';
 
   document.getElementById('comanda-print').innerHTML = `
@@ -1172,15 +1159,12 @@ function imprimirComanda(id) {
     <div class="cp-row"><span class="cp-lbl">Cliente</span><span><b>${p.nome}</b></span></div>
     ${p.telefone?`<div class="cp-row"><span class="cp-lbl">Telefone</span><span>${p.telefone}</span></div>`:''}
     ${p.endereco?`<div class="cp-row"><span class="cp-lbl">Endereço</span><span>${p.endereco}</span></div>`:''}
-    <div class="cp-row"><span class="cp-lbl">Tipo</span><span>${tipoLbl}</span></div>
-    <div class="cp-row"><span class="cp-lbl">Pagamento</span><span>${p.pagamento}</span></div>
     <hr class="cp-sep">
     <div class="cp-items-title">Itens</div>
     ${itensHtml}
     <hr class="cp-sep">
     ${freteHtml}
     <div class="cp-total"><span>TOTAL</span><span>R$ ${totalComFrete.toFixed(2).replace('.',',')}</span></div>
-    <div class="cp-footer">Obrigado pela preferência! 🍔</div>
   `;
 
   document.body.classList.add('print-comanda');
@@ -1339,12 +1323,7 @@ function calcTotal() {
   document.getElementById('total-val').textContent = 'R$ ' + tot.toFixed(2).replace('.',',');
 }
 
-document.querySelectorAll('input[name="tipo"]').forEach(r => r.addEventListener('change', () => {
-  const tipo = document.querySelector('input[name="tipo"]:checked').value;
-  const freteField = document.getElementById('frete-field');
-  if (freteField) freteField.style.display = tipo === 'proprio' ? 'flex' : 'none';
-  renderMenu();
-}));
+document.querySelectorAll('input[name="tipo"]').forEach(r => r.addEventListener('change', renderMenu));
 
 async function lancar() {
   const nome = document.getElementById('f-nome').value.trim();
@@ -1373,7 +1352,7 @@ async function lancar() {
   if (!itens.length) { toast('Adicione ao menos um item!', true); return; }
 
   const freteEl = document.getElementById('f-frete');
-  const frete = tipo === 'proprio' ? (parseFloat(freteEl?.value) || 0) : 0;
+  const frete = parseFloat(freteEl?.value) || 0;
   total += frete;
 
   const btn = document.getElementById('btn-lancar');
