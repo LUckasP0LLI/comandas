@@ -481,11 +481,8 @@ body{
   body.print-relatorio #rel-resultado{display:block!important;}
   body.print-relatorio .print-header{display:block!important;}
 
-  /* Modo comanda */
-  body.print-comanda .header,
-  body.print-comanda .bottom-nav,
-  body.print-comanda #app > .view,
-  body.print-comanda .toast{display:none!important;}
+  /* Modo comanda — esconde TUDO, mostra só o painel */
+  body.print-comanda > *{display:none!important;}
   body.print-comanda #comanda-print{
     display:block!important;
     font-family:'Courier New',monospace;
@@ -493,7 +490,7 @@ body{
     max-width:360px;margin:0 auto;padding:16px;
   }
   body.print-comanda .cp-logo{font-size:22px;font-weight:900;text-align:center;letter-spacing:3px;margin-bottom:2px;}
-  body.print-comanda .cp-sub{text-align:center;font-size:11px;color:#555;margin-bottom:8px;}
+  body.print-comanda .cp-sub{display:none;}
   body.print-comanda .cp-sep{border:none;border-top:1px dashed #999;margin:8px 0;}
   body.print-comanda .cp-row{display:flex;justify-content:space-between;margin:3px 0;font-size:12px;}
   body.print-comanda .cp-lbl{color:#555;}
@@ -503,7 +500,6 @@ body{
   body.print-comanda .cp-item-detail{font-size:11px;color:#555;padding-left:10px;margin-top:1px;}
   body.print-comanda .cp-frete{display:flex;justify-content:space-between;font-size:12px;color:#555;margin-top:4px;}
   body.print-comanda .cp-total{display:flex;justify-content:space-between;font-weight:900;font-size:16px;margin-top:6px;padding-top:6px;border-top:2px solid #111;}
-  body.print-comanda .cp-footer{text-align:center;font-size:11px;color:#888;margin-top:14px;}
 }
 .print-header{display:none;text-align:center;margin-bottom:1.5rem;border-bottom:2px solid #b8860b;padding-bottom:12px;}
 .print-header h1{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:2px;color:#b8860b;}
@@ -1154,7 +1150,6 @@ function imprimirComanda(id) {
 
   document.getElementById('comanda-print').innerHTML = `
     <div class="cp-logo">🍔 XIS</div>
-    <div class="cp-sub">${data} às ${hora}</div>
     <hr class="cp-sep">
     <div class="cp-row"><span class="cp-lbl">Cliente</span><span><b>${p.nome}</b></span></div>
     ${p.telefone?`<div class="cp-row"><span class="cp-lbl">Telefone</span><span>${p.telefone}</span></div>`:''}
