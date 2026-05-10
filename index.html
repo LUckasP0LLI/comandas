@@ -913,6 +913,14 @@ function toggleSom() {
 let pedidosConhecidos = null;
 
 function initFirebase(cfg) {
+  // Mostra o app imediatamente — não espera o Firebase
+  hideLoading();
+  document.getElementById('app').style.display = 'block';
+  const btnSom = document.getElementById('btn-som');
+  if (btnSom) { btnSom.textContent = somAtivo ? '🔔' : '🔕'; btnSom.title = somAtivo ? 'Mutar som' : 'Ativar som'; }
+  renderMenu();
+  setDefaultDates();
+
   try {
     firebase.initializeApp(cfg);
     db = firebase.database();
@@ -925,7 +933,6 @@ function initFirebase(cfg) {
     });
     pedidosRef.on('value', s => {
       const novos = s.val() || {};
-      // Na primeira carga só registra os IDs existentes, sem tocar som
       if (pedidosConhecidos === null) {
         pedidosConhecidos = new Set(Object.keys(novos));
       } else {
@@ -936,18 +943,15 @@ function initFirebase(cfg) {
       pedidos = novos;
       renderComandas();
     });
-    historicoRef.orderByChild('despachado').limitToLast(200).on('value', s => { historico = s.val()||{}; renderHistorico(); });
-    hideLoading();
-    document.getElementById('app').style.display = 'block';
-    // Sincroniza ícone do botão de som
-    const btnSom = document.getElementById('btn-som');
-    btnSom.textContent = somAtivo ? '🔔' : '🔕';
-    btnSom.title = somAtivo ? 'Mutar som' : 'Ativar som';
-    renderMenu();
-    setDefaultDates();
+    historicoRef.orderByChild('despachado').limitToLast(200).on('value', s => {
+      historico = s.val()||{};
+      renderHistorico();
+    });
   } catch(e) {
-    document.getElementById('load-txt').textContent = 'Erro: ' + e.message;
-    setTimeout(() => { hideLoading(); document.getElementById('setup-screen').style.display = 'flex'; }, 1800);
+    console.error('Firebase erro:', e);
+    document.getElementById('status-lbl').textContent = 'erro';
+    document.getElementById('status-dot').className = 'status-dot offline';
+    toast('Erro Firebase: ' + e.message, true);
   }
 }
 function hideLoading() {
@@ -1536,8 +1540,17 @@ function toast(msg, err=false) {
 // ══════════════════════════════════════════════
 window.addEventListener('load', () => {
   const cfg = getConfig();
-  if (!cfg) { hideLoading(); document.getElementById('setup-screen').style.display = 'flex'; }
-  else initFirebase(cfg);
+  if (!cfg) {
+    hideLoading();
+    document.getElementById('setup-screen').style.display = 'flex';
+    return;
+  }
+  // Garante que o SDK do Firebase carregou
+  if (typeof firebase === 'undefined') {
+    document.getElementById('load-txt').textContent = 'Erro: SDK Firebase não carregou. Verifique sua conexão.';
+    return;
+  }
+  initFirebase(cfg);
 });
 </script>
 </body>
