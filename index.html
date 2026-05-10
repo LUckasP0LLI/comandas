@@ -192,8 +192,8 @@ body{
 
 .card-top{padding:12px 14px 10px;display:flex;align-items:flex-start;justify-content:space-between;border-bottom:1px solid var(--border);}
 .cli-nome{font-weight:700;font-size:15px;line-height:1.2;}
-.cli-end{font-size:12px;color:var(--muted);margin-top:2px;}
-.cli-tel{font-size:11px;color:var(--muted2);margin-top:1px;}
+.cli-end{font-size:12px;color:#b0c4d8;margin-top:2px;font-weight:500;}
+.cli-tel{font-size:12px;color:#9ecf9e;margin-top:2px;font-weight:500;}
 .badges{display:flex;flex-direction:column;align-items:flex-end;gap:4px;margin-left:8px;flex-shrink:0;}
 .badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;letter-spacing:.3px;white-space:nowrap;}
 .badge-d{background:var(--red-dim);color:var(--red);border:1px solid rgba(224,85,85,0.25);}
@@ -234,6 +234,46 @@ body{
 }
 .btn-desp:hover{background:#f5c03a;}
 .btn-desp:active{transform:scale(.98);}
+
+/* ── CARD ACTIONS extra ── */
+.card-actions{padding:0 14px 12px;display:flex;flex-direction:column;gap:8px;}
+.frete-row{display:flex;align-items:center;gap:8px;}
+.frete-lbl{font-size:11px;color:var(--muted);white-space:nowrap;}
+.frete-input{
+  flex:1;background:var(--surface2);border:1px solid var(--border2);color:var(--text);
+  font-family:'DM Sans',sans-serif;font-size:13px;padding:6px 10px;
+  border-radius:7px;outline:none;transition:border-color .15s;
+}
+.frete-input:focus{border-color:var(--accent);}
+.btn-frete{
+  background:var(--surface3);border:1px solid var(--border2);color:var(--text);
+  font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;
+  padding:6px 10px;border-radius:7px;cursor:pointer;white-space:nowrap;transition:all .15s;
+}
+.btn-frete:hover{border-color:var(--accent);color:var(--accent);}
+.pago-row{display:flex;align-items:center;gap:8px;}
+.pago-toggle{
+  display:flex;align-items:center;gap:7px;cursor:pointer;
+  font-size:12px;color:var(--muted);user-select:none;flex:1;
+  -webkit-tap-highlight-color:transparent;
+}
+.pago-toggle input{display:none;}
+.pago-box{
+  width:18px;height:18px;border:2px solid var(--border2);border-radius:5px;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  transition:all .15s;font-size:12px;
+}
+.pago-toggle input:checked ~ .pago-box{background:var(--green);border-color:var(--green);color:#000;}
+.pago-toggle.checked{color:var(--green);}
+.btn-print-cmd{
+  background:none;border:1px solid var(--border2);color:var(--muted);
+  font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;
+  padding:6px 10px;border-radius:7px;cursor:pointer;transition:all .15s;
+  display:flex;align-items:center;gap:5px;white-space:nowrap;
+  -webkit-tap-highlight-color:transparent;
+}
+.btn-print-cmd:hover{border-color:var(--blue,#5b9ce8);color:var(--blue,#5b9ce8);}
+.actions-row{display:flex;gap:8px;align-items:center;}
 
 /* ════════════════════════════════════════════
    FORM — LANÇAR PEDIDO
@@ -616,6 +656,10 @@ body{
           <div class="fgroup"><label>Nome *</label><input id="f-nome" placeholder="Ex: João Silva"></div>
           <div class="fgroup"><label>Telefone</label><input id="f-tel" placeholder="(51) 9 9999-9999"></div>
           <div class="fgroup full"><label>Endereço</label><input id="f-end" placeholder="Rua, Nº, Bairro — deixe em branco p/ retirada"></div>
+          <div class="fgroup" id="frete-field" style="display:none;">
+            <label>Taxa de Entrega (R$)</label>
+            <input type="number" id="f-frete" placeholder="0,00" min="0" step="0.50">
+          </div>
           <div class="fgroup full">
             <label>Forma de Pagamento *</label>
             <select id="f-pag">
@@ -961,33 +1005,53 @@ function buildCard(p, agora) {
   const pagIcon = {Pix:'💠',Dinheiro:'💵','Cartão de Crédito':'💳','Cartão de Débito':'💳'}[p.pagamento]||'💳';
   const tipoCls = p.tipo==='delivery'?'badge-d':'badge-p';
   const tipoLbl = p.tipo==='delivery'?'🛵 Delivery':'✅ Própria';
+  const isPago = p.pago === true;
+  const totalComFrete = (p.total||0) + (p.frete||0);
 
   const itensHtml = (p.itens||[]).map(it => {
     const qty = it.qty || 1;
     const addTexto = it.adicionais && it.adicionais.length
-      ? it.adicionais.map(a => `+${a.nome} (R$${a.preco.toFixed(2).replace('.',',')})`).join(' · ')
+      ? it.adicionais.map(a => `+${a.nome} (R$${(+a.preco).toFixed(2).replace('.',',')})`).join(' · ')
       : '';
     return `<div class="item-ln">
       <div class="item-top">
         <span class="item-qtd">${qty}x</span>
         <span class="item-nm">${it.nome}</span>
-        <span class="item-vl">R$ ${it.total.toFixed(2).replace('.',',')}</span>
+        <span class="item-vl">R$ ${(+it.total).toFixed(2).replace('.',',')}</span>
       </div>
       ${addTexto ? `<div class="item-add">➕ ${addTexto}</div>` : ''}
       ${it.obs ? `<div class="item-obs">⚠️ ${it.obs}</div>` : ''}
     </div>`;
   }).join('');
 
+  const freteHtml = (p.tipo === 'proprio' && p.frete > 0)
+    ? `<div style="display:flex;justify-content:space-between;margin-top:4px;padding-top:6px;border-top:1px dashed var(--border2)">
+        <span style="font-size:12px;color:var(--muted)">🚗 Frete</span>
+        <span style="font-size:12px;color:var(--accent);font-weight:600">R$ ${(+p.frete).toFixed(2).replace('.',',')}</span>
+       </div>` : '';
+
+  // Only show payment confirmation for entrega própria
+  const pagoHtml = p.tipo === 'proprio' ? `
+    <div class="pago-row">
+      <label class="pago-toggle ${isPago?'checked':''}" onclick="togglePago('${p.id}',${isPago})">
+        <div class="pago-box">${isPago?'✓':''}</div>
+        ${isPago ? '<span>✅ Pagamento confirmado</span>' : '<span>Confirmar pagamento recebido</span>'}
+      </label>
+    </div>` : '';
+
   return `<div class="card ${urgente?'urgente':alerta?'alerta':''}" id="card-${p.id}">
     <div class="card-top">
-      <div>
+      <div style="flex:1;min-width:0;">
         <div class="cli-nome">${p.nome}</div>
-        ${p.endereco?`<div class="cli-end">📍 ${p.endereco}</div>`:''}
         ${p.telefone?`<div class="cli-tel">📞 ${p.telefone}</div>`:''}
+        ${p.endereco?`<div class="cli-end">📍 ${p.endereco}</div>`:''}
       </div>
       <div class="badges"><span class="badge ${tipoCls}">${tipoLbl}</span></div>
     </div>
-    <div class="card-itens">${itensHtml}</div>
+    <div class="card-itens">
+      ${itensHtml}
+      ${freteHtml}
+    </div>
     <div class="card-mid">
       <div class="timer-block">
         <div class="timer-lbl-sm">Tempo</div>
@@ -1001,10 +1065,16 @@ function buildCard(p, agora) {
     </div>
     <div class="card-bot">
       <div class="total-ln">
-        <span class="total-lbl">Total</span>
-        <span class="total-num">R$ ${p.total.toFixed(2).replace('.',',')}</span>
+        <span class="total-lbl">Total${p.frete>0?' (c/ frete)':''}</span>
+        <span class="total-num">R$ ${totalComFrete.toFixed(2).replace('.',',')}</span>
       </div>
       <button class="btn-desp" onclick="despachar('${p.id}','${p.nome}')">✅ Despachar Pedido</button>
+    </div>
+    <div class="card-actions">
+      ${pagoHtml}
+      <div class="actions-row">
+        <button class="btn-print-cmd" onclick="imprimirComanda('${p.id}')">🖨️ Imprimir Comanda</button>
+      </div>
     </div>
   </div>`;
 }
@@ -1028,6 +1098,81 @@ async function despachar(id, nome) {
     await pedidosRef.child(id).remove();
     toast(`Pedido de ${nome} despachado! ✅`);
   } catch(e) { toast('Erro: ' + e.message, true); }
+}
+
+async function togglePago(id, atualPago) {
+  try {
+    await pedidosRef.child(id).update({ pago: !atualPago });
+    toast(!atualPago ? 'Pagamento confirmado! ✅' : 'Pagamento desmarcado');
+  } catch(e) { toast('Erro: ' + e.message, true); }
+}
+
+function imprimirComanda(id) {
+  const p = pedidos[id]; if (!p) return;
+  const hora = new Date(p.inicio).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  const data = new Date(p.inicio).toLocaleDateString('pt-BR');
+  const tipoLbl = p.tipo === 'delivery' ? '🛵 Delivery' : '✅ Entrega Própria';
+  const totalComFrete = (p.total||0) + (p.frete||0);
+
+  const itensStr = (p.itens||[]).map(it => {
+    const qty = it.qty || 1;
+    let linha = `${qty}x ${it.nome} — R$ ${(+it.total).toFixed(2).replace('.',',')}`;
+    if (it.adicionais && it.adicionais.length) {
+      linha += `\n   ➕ ${it.adicionais.map(a=>a.nome).join(', ')}`;
+    }
+    if (it.obs) linha += `\n   ⚠️ ${it.obs}`;
+    return linha;
+  }).join('\n');
+
+  const freteStr = (p.tipo==='proprio' && p.frete>0)
+    ? `\nFrete: R$ ${(+p.frete).toFixed(2).replace('.',',')}` : '';
+
+  const win = window.open('', '_blank', 'width=400,height=600');
+  win.document.write(`<!DOCTYPE html><html><head>
+    <meta charset="UTF-8">
+    <title>Comanda — ${p.nome}</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0;}
+      body{font-family:'Courier New',monospace;font-size:13px;padding:20px;color:#111;background:#fff;max-width:380px;}
+      .logo{font-size:20px;font-weight:900;text-align:center;letter-spacing:2px;margin-bottom:4px;}
+      .sep{border:none;border-top:1px dashed #999;margin:10px 0;}
+      .row{display:flex;justify-content:space-between;margin:4px 0;}
+      .label{color:#555;font-size:11px;}
+      .item{margin:6px 0;}
+      .item-main{display:flex;justify-content:space-between;}
+      .item-detail{color:#555;font-size:11px;padding-left:12px;margin-top:2px;}
+      .total-row{display:flex;justify-content:space-between;font-weight:900;font-size:15px;margin-top:6px;}
+      .frete-row{display:flex;justify-content:space-between;font-size:12px;color:#555;}
+      .footer{text-align:center;font-size:11px;color:#888;margin-top:16px;}
+      @media print{body{padding:8px;}}
+    </style>
+  </head><body>
+    <div class="logo">🍔 XIS</div>
+    <div style="text-align:center;font-size:11px;color:#555;">${data} às ${hora}</div>
+    <hr class="sep">
+    <div class="row"><span class="label">Cliente</span><span><b>${p.nome}</b></span></div>
+    ${p.telefone?`<div class="row"><span class="label">Telefone</span><span>${p.telefone}</span></div>`:''}
+    ${p.endereco?`<div class="row"><span class="label">Endereço</span><span style="text-align:right;max-width:220px">${p.endereco}</span></div>`:''}
+    <div class="row"><span class="label">Tipo</span><span>${tipoLbl}</span></div>
+    <div class="row"><span class="label">Pagamento</span><span>${p.pagamento}</span></div>
+    <hr class="sep">
+    <div class="label" style="margin-bottom:6px;">ITENS</div>
+    ${(p.itens||[]).map(it => {
+      const qty = it.qty||1;
+      const adds = it.adicionais&&it.adicionais.length ? `<div class="item-detail">➕ ${it.adicionais.map(a=>a.nome).join(', ')}</div>` : '';
+      const obs  = it.obs ? `<div class="item-detail">⚠️ ${it.obs}</div>` : '';
+      return `<div class="item">
+        <div class="item-main"><span>${qty}x ${it.nome}</span><span>R$ ${(+it.total).toFixed(2).replace('.',',')}</span></div>
+        ${adds}${obs}
+      </div>`;
+    }).join('')}
+    <hr class="sep">
+    ${p.frete>0?`<div class="frete-row"><span>🚗 Frete</span><span>R$ ${(+p.frete).toFixed(2).replace('.',',')}</span></div>`:''}
+    <div class="total-row"><span>TOTAL</span><span>R$ ${totalComFrete.toFixed(2).replace('.',',')}</span></div>
+    <div class="footer">Obrigado pela preferência! 🍔</div>
+    <script>window.onload=()=>{window.print();window.onafterprint=()=>window.close();}<\/script>
+  </body></html>`);
+  win.document.close();
 }
 
 // ══════════════════════════════════════════════
@@ -1081,6 +1226,9 @@ function renderMenu() {
   });
 
   box.innerHTML = html;
+  // live frete recalc
+  const freteEl = document.getElementById('f-frete');
+  if (freteEl) freteEl.addEventListener('input', calcTotal);
   calcTotal();
 }
 
@@ -1172,10 +1320,18 @@ function calcTotal() {
     const si = getSimplePreco(id);
     if (si) tot += si.preco * qty;
   }
+  const freteEl = document.getElementById('f-frete');
+  const frete = freteEl ? (parseFloat(freteEl.value) || 0) : 0;
+  tot += frete;
   document.getElementById('total-val').textContent = 'R$ ' + tot.toFixed(2).replace('.',',');
 }
 
-document.querySelectorAll('input[name="tipo"]').forEach(r => r.addEventListener('change', renderMenu));
+document.querySelectorAll('input[name="tipo"]').forEach(r => r.addEventListener('change', () => {
+  const tipo = document.querySelector('input[name="tipo"]:checked').value;
+  const freteField = document.getElementById('frete-field');
+  if (freteField) freteField.style.display = tipo === 'proprio' ? 'flex' : 'none';
+  renderMenu();
+}));
 
 async function lancar() {
   const nome = document.getElementById('f-nome').value.trim();
@@ -1203,19 +1359,24 @@ async function lancar() {
   }
   if (!itens.length) { toast('Adicione ao menos um item!', true); return; }
 
+  const freteEl = document.getElementById('f-frete');
+  const frete = tipo === 'proprio' ? (parseFloat(freteEl?.value) || 0) : 0;
+  total += frete;
+
   const btn = document.getElementById('btn-lancar');
   btn.disabled = true; btn.textContent = 'Enviando...';
   try {
     await pedidosRef.push({
       nome, telefone: document.getElementById('f-tel').value.trim(),
       endereco: document.getElementById('f-end').value.trim(),
-      pagamento: pag, tipo, itens, total, inicio: Date.now()
+      pagamento: pag, tipo, itens, frete, total, inicio: Date.now()
     });
     toast('Pedido lançado! 🚀');
     document.getElementById('f-nome').value = '';
     document.getElementById('f-tel').value  = '';
     document.getElementById('f-end').value  = '';
     document.getElementById('f-pag').value  = '';
+    if (freteEl) freteEl.value = '';
     renderMenu();
   } catch(e) { toast('Erro: ' + e.message, true); }
   btn.disabled = false; btn.textContent = '🚀 Lançar na Comanda';
@@ -1306,7 +1467,7 @@ function gerarRelatorio() {
       const key = it.nome;
       if (!porItem[key]) porItem[key] = { qty:0, total:0 };
       porItem[key].qty += (it.qty||1);
-      porItem[key].total += it.total;
+      porItem[key].total += (parseFloat(it.total)||0);
     });
   });
   const itemRows = Object.entries(porItem).sort((a,b)=>b[1].qty-a[1].qty).map(([nome,v]) =>
