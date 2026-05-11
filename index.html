@@ -839,22 +839,12 @@ const ALERT_MIN = 30, URGENT_MIN = 60;
 let db, pedidosRef, historicoRef;
 let pedidos = {}, historico = {};
 
-// ══ CONFIG FIREBASE HARDCODED (para teste) ══
-const FIREBASE_CONFIG_HARDCODED = {
-  apiKey:            "AIzaSyplaceholder-substitua-pela-chave-real",
-  authDomain:        "xis-comandas.firebaseapp.com",
-  databaseURL:       "https://xis-comandas-default-rtdb.firebaseio.com",
-  projectId:         "xis-comandas",
-  storageBucket:     "xis-comandas.appspot.com",
-  messagingSenderId: "280923657952",
-  appId:             "1:280923657952:web:000000000000"
-};
-
 function getConfig() {
-  // 1. Tenta localStorage
-  try { const s = localStorage.getItem('xis_fb_config'); if(s) return JSON.parse(s); } catch(e){}
-  // 2. Usa hardcoded
-  return FIREBASE_CONFIG_HARDCODED;
+  try {
+    const s = localStorage.getItem('xis_fb_config');
+    if (s) return JSON.parse(s);
+  } catch(e) {}
+  return null;
 }
 function salvarConfig() {
   const f = id => document.getElementById(id).value.trim();
@@ -926,21 +916,21 @@ function toggleSom() {
 let pedidosConhecidos = null;
 
 function initFirebase(cfg) {
-  renderMenu();
-  setDefaultDates();
   const btnSom = document.getElementById('btn-som');
   if (btnSom) { btnSom.textContent = somAtivo ? '🔔' : '🔕'; btnSom.title = somAtivo ? 'Mutar som' : 'Ativar som'; }
 
   try {
     firebase.initializeApp(cfg);
     db = firebase.database();
-    pedidosRef = db.ref('pedidos');
+    pedidosRef   = db.ref('pedidos');
     historicoRef = db.ref('historico');
+
     db.ref('.info/connected').on('value', s => {
       const on = s.val() === true;
-      document.getElementById('status-dot').className = 'status-dot ' + (on?'online':'offline');
+      document.getElementById('status-dot').className = 'status-dot ' + (on ? 'online' : 'offline');
       document.getElementById('status-lbl').textContent = on ? 'online' : 'offline';
     });
+
     pedidosRef.on('value', s => {
       const novos = s.val() || {};
       if (pedidosConhecidos === null) {
@@ -953,10 +943,12 @@ function initFirebase(cfg) {
       pedidos = novos;
       renderComandas();
     });
+
     historicoRef.orderByChild('despachado').limitToLast(200).on('value', s => {
-      historico = s.val()||{};
+      historico = s.val() || {};
       renderHistorico();
     });
+
   } catch(e) {
     console.error('Firebase erro:', e);
     document.getElementById('status-lbl').textContent = 'erro';
@@ -1101,7 +1093,6 @@ function buildCard(p, agora) {
       ${pagoHtml}
     </div>
   </div>`;
-}
 }
 setInterval(() => {
   if (!document.getElementById('view-comandas').classList.contains('active')) return;
@@ -1549,6 +1540,9 @@ function toast(msg, err=false) {
 // BOOT
 // ══════════════════════════════════════════════
 window.addEventListener('load', () => {
+  renderMenu();
+  setDefaultDates();
+
   const cfg = getConfig();
   if (!cfg) {
     document.getElementById('setup-screen').style.display = 'flex';
