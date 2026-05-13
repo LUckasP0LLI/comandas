@@ -993,13 +993,10 @@ function toggleSom() {
 // IDs conhecidos — para detectar apenas pedidos NOVOS
 let pedidosConhecidos = null;
 
-function initFirebase(cfg) {
-  const btnSom = document.getElementById('btn-som');
-  if (btnSom) { btnSom.textContent = somAtivo ? '🔔' : '🔕'; btnSom.title = somAtivo ? 'Mutar som' : 'Ativar som'; }
-
+function initFirebase() {
+  // Firebase já foi inicializado no boot — aqui só configura o banco
   try {
-    firebase.initializeApp(cfg);
-    db = firebase.database();
+    db           = firebase.database();
     pedidosRef   = db.ref('pedidos');
     historicoRef = db.ref('historico');
 
@@ -1028,10 +1025,10 @@ function initFirebase(cfg) {
     });
 
   } catch(e) {
-    console.error('Firebase erro:', e);
+    console.error('Firebase DB erro:', e);
     document.getElementById('status-lbl').textContent = 'erro';
     document.getElementById('status-dot').className = 'status-dot offline';
-    toast('Erro Firebase: ' + e.message, true);
+    toast('Erro ao conectar banco: ' + e.message, true);
   }
 }
 function hideLoading() {
@@ -1743,15 +1740,12 @@ function mostrarLogin() {
 function mostrarApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = '';
+  const btnSom = document.getElementById('btn-som');
+  if (btnSom) { btnSom.textContent = somAtivo ? '🔔' : '🔕'; btnSom.title = somAtivo ? 'Mutar som' : 'Ativar som'; }
   renderMenu();
   setDefaultDates();
-  const cfg = getConfig();
-  if (!cfg) {
-    document.getElementById('setup-screen').style.display = 'flex';
-    document.getElementById('app').style.display = 'none';
-    return;
-  }
-  if (!db) initFirebase(cfg);
+  // Inicia o banco só uma vez
+  if (!db) initFirebase();
 }
 
 function fazerLogin() {
@@ -1789,7 +1783,7 @@ function fazerLogin() {
 
 function fazerLogout() {
   if (!confirm('Deseja sair do sistema?')) return;
-  auth.signOut();
+  auth.signOut().catch(e => toast('Erro ao sair: ' + e.message, true));
 }
 
 // ══════════════════════════════════════════════
@@ -1797,25 +1791,27 @@ function fazerLogout() {
 // ══════════════════════════════════════════════
 window.addEventListener('load', () => {
   const cfg = getConfig();
+
   if (!cfg) {
-    // Sem config Firebase → mostra setup (sem login ainda)
+    // Sem config Firebase → mostra setup antes de qualquer coisa
     document.getElementById('app').style.display = 'none';
+    document.getElementById('login-screen').style.display = 'none';
     document.getElementById('setup-screen').style.display = 'flex';
     return;
   }
 
-  // Inicializa Firebase (app + auth primeiro, database depois do login)
   try {
+    // initializeApp uma única vez aqui
     firebase.initializeApp(cfg);
     auth = firebase.auth();
-    // Persistência de sessão: LOCAL = permanece mesmo fechando o navegador
-    // Troque para .SESSION se quiser que expire ao fechar
     auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
   } catch(e) {
     console.error('Firebase init erro:', e);
+    toast('Erro ao inicializar Firebase: ' + e.message, true);
+    return;
   }
 
-  // onAuthStateChanged é o árbitro único — nunca chame iniciarApp() diretamente
+  // onAuthStateChanged decide o que mostrar — único ponto de controle
   auth.onAuthStateChanged(user => {
     if (user) {
       mostrarApp();
