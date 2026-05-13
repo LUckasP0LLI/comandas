@@ -447,61 +447,8 @@ body{
 .toast.err{background:var(--red);color:#fff;}
 
 /* ════════════════════════════════════════════
-   LOGIN
+   PRINT / PDF
    ════════════════════════════════════════════ */
-#login-screen{
-  display:none;
-  position:fixed;inset:0;
-  background:var(--bg);
-  align-items:center;justify-content:center;
-  z-index:9000;padding:1.5rem;
-}
-.login-card{
-  background:var(--surface);border:1px solid var(--border2);
-  border-radius:16px;padding:2.5rem 2rem;
-  max-width:360px;width:100%;
-}
-.login-logo{
-  font-family:'Bebas Neue',sans-serif;font-size:42px;
-  letter-spacing:4px;color:var(--accent);
-  text-align:center;margin-bottom:4px;
-}
-.login-sub{
-  text-align:center;font-size:13px;color:var(--muted);
-  margin-bottom:1.75rem;
-}
-.login-field{margin-bottom:14px;}
-.login-field label{
-  display:block;font-size:11px;font-weight:700;
-  letter-spacing:.8px;text-transform:uppercase;
-  color:var(--muted);margin-bottom:5px;
-}
-.login-field input{
-  width:100%;background:var(--surface2);border:1px solid var(--border2);
-  color:var(--text);font-family:'DM Sans',sans-serif;font-size:15px;
-  padding:11px 13px;border-radius:9px;outline:none;
-  transition:border-color .15s;
-  /* evita zoom no iOS */
-  font-size:16px;
-}
-.login-field input:focus{border-color:var(--accent);}
-.login-btn{
-  width:100%;background:var(--accent);color:#000;border:none;
-  font-family:'DM Sans',sans-serif;font-size:15px;font-weight:700;
-  padding:13px;border-radius:10px;cursor:pointer;
-  transition:background .15s;margin-top:4px;
-  letter-spacing:.3px;
-}
-.login-btn:hover{background:#f5c03a;}
-.login-btn:active{transform:scale(.99);}
-.login-erro{
-  color:var(--red);font-size:13px;text-align:center;
-  margin-top:10px;min-height:18px;
-}
-.login-ver{
-  text-align:center;font-size:10px;color:var(--muted2);
-  margin-top:1.5rem;
-}
 /* Painel de impressão de comanda — oculto na tela, aparece só no print */
 #comanda-print{display:none;}
 
@@ -534,7 +481,29 @@ body{
   body.print-relatorio #rel-resultado{display:block!important;}
   body.print-relatorio .print-header{display:block!important;}
 
-  /* Modo comanda — via iframe, sem CSS especial necessário */
+  /* Modo comanda */
+  body.print-comanda .header,
+  body.print-comanda .bottom-nav,
+  body.print-comanda #app > .view,
+  body.print-comanda .toast{display:none!important;}
+  body.print-comanda #comanda-print{
+    display:block!important;
+    font-family:'Courier New',monospace;
+    font-size:13px;color:#111;
+    max-width:360px;margin:0 auto;padding:16px;
+  }
+  body.print-comanda .cp-logo{font-size:22px;font-weight:900;text-align:center;letter-spacing:3px;margin-bottom:2px;}
+  body.print-comanda .cp-sub{text-align:center;font-size:11px;color:#555;margin-bottom:8px;}
+  body.print-comanda .cp-sep{border:none;border-top:1px dashed #999;margin:8px 0;}
+  body.print-comanda .cp-row{display:flex;justify-content:space-between;margin:3px 0;font-size:12px;}
+  body.print-comanda .cp-lbl{color:#555;}
+  body.print-comanda .cp-items-title{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#555;margin-bottom:5px;}
+  body.print-comanda .cp-item{margin:5px 0;}
+  body.print-comanda .cp-item-main{display:flex;justify-content:space-between;font-weight:600;}
+  body.print-comanda .cp-item-detail{font-size:11px;color:#555;padding-left:10px;margin-top:1px;}
+  body.print-comanda .cp-frete{display:flex;justify-content:space-between;font-size:12px;color:#555;margin-top:4px;}
+  body.print-comanda .cp-total{display:flex;justify-content:space-between;font-weight:900;font-size:16px;margin-top:6px;padding-top:6px;border-top:2px solid #111;}
+  body.print-comanda .cp-footer{text-align:center;font-size:11px;color:#888;margin-top:14px;}
 }
 .print-header{display:none;text-align:center;margin-bottom:1.5rem;border-bottom:2px solid #b8860b;padding-bottom:12px;}
 .print-header h1{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:2px;color:#b8860b;}
@@ -640,33 +609,10 @@ body{
 <body>
 
 <!-- LOADING -->
-<div id="loading-overlay" style="display:none;">
+<div id="loading-overlay">
   <div class="load-logo">🍔 XIS</div>
   <div class="load-spin"></div>
   <div class="load-txt" id="load-txt">Conectando ao banco de dados...</div>
-</div>
-
-<!-- LOGIN -->
-<div id="login-screen">
-  <div class="login-card">
-    <div class="login-logo">🍔 XIS</div>
-    <div class="login-sub">Sistema de Comandas — Acesso Interno</div>
-    <div class="login-field">
-      <label>E-mail</label>
-      <input type="email" id="l-email" placeholder="seu@email.com"
-        autocomplete="username"
-        onkeydown="if(event.key==='Enter')document.getElementById('l-pass').focus()">
-    </div>
-    <div class="login-field">
-      <label>Senha</label>
-      <input type="password" id="l-pass" placeholder="••••••••"
-        autocomplete="current-password"
-        onkeydown="if(event.key==='Enter')fazerLogin()">
-    </div>
-    <button class="login-btn" onclick="fazerLogin()">Entrar</button>
-    <div class="login-erro" id="login-erro"></div>
-    <div class="login-ver">v3 · Sistema Interno</div>
-  </div>
 </div>
 
 <!-- SETUP -->
@@ -697,7 +643,7 @@ body{
 </div>
 
 <!-- APP -->
-<div id="app">
+<div id="app" style="display:none;">
   <div class="header">
     <div class="logo">🍔 XIS</div>
     <div class="tabs">
@@ -710,7 +656,6 @@ body{
       <span class="status-dot" id="status-dot"></span>
       <button class="icon-btn" id="btn-som" onclick="toggleSom()" title="Ativar/Mutar som">🔔</button>
       <button class="icon-btn" onclick="limparConfig()" title="Reconfigurar Firebase">⚙️</button>
-      <button class="icon-btn" onclick="fazerLogout()" title="Sair" style="border-color:var(--red);color:var(--red);">Sair</button>
     </div>
   </div>
 
@@ -852,7 +797,6 @@ body{
 
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
 <script>
@@ -918,10 +862,7 @@ let db, pedidosRef, historicoRef;
 let pedidos = {}, historico = {};
 
 function getConfig() {
-  try {
-    const s = localStorage.getItem('xis_fb_config');
-    if (s) return JSON.parse(s);
-  } catch(e) {}
+  try { const s = localStorage.getItem('xis_fb_config'); if(s) return JSON.parse(s); } catch(e){}
   return null;
 }
 function salvarConfig() {
@@ -993,21 +934,20 @@ function toggleSom() {
 // IDs conhecidos — para detectar apenas pedidos NOVOS
 let pedidosConhecidos = null;
 
-function initFirebase() {
-  // Firebase já foi inicializado no boot — aqui só configura o banco
+function initFirebase(cfg) {
   try {
-    db           = firebase.database();
-    pedidosRef   = db.ref('pedidos');
+    firebase.initializeApp(cfg);
+    db = firebase.database();
+    pedidosRef = db.ref('pedidos');
     historicoRef = db.ref('historico');
-
     db.ref('.info/connected').on('value', s => {
       const on = s.val() === true;
-      document.getElementById('status-dot').className = 'status-dot ' + (on ? 'online' : 'offline');
+      document.getElementById('status-dot').className = 'status-dot ' + (on?'online':'offline');
       document.getElementById('status-lbl').textContent = on ? 'online' : 'offline';
     });
-
     pedidosRef.on('value', s => {
       const novos = s.val() || {};
+      // Na primeira carga só registra os IDs existentes, sem tocar som
       if (pedidosConhecidos === null) {
         pedidosConhecidos = new Set(Object.keys(novos));
       } else {
@@ -1018,17 +958,18 @@ function initFirebase() {
       pedidos = novos;
       renderComandas();
     });
-
-    historicoRef.orderByChild('despachado').limitToLast(200).on('value', s => {
-      historico = s.val() || {};
-      renderHistorico();
-    });
-
+    historicoRef.orderByChild('despachado').limitToLast(200).on('value', s => { historico = s.val()||{}; renderHistorico(); });
+    hideLoading();
+    document.getElementById('app').style.display = 'block';
+    // Sincroniza ícone do botão de som
+    const btnSom = document.getElementById('btn-som');
+    btnSom.textContent = somAtivo ? '🔔' : '🔕';
+    btnSom.title = somAtivo ? 'Mutar som' : 'Ativar som';
+    renderMenu();
+    setDefaultDates();
   } catch(e) {
-    console.error('Firebase DB erro:', e);
-    document.getElementById('status-lbl').textContent = 'erro';
-    document.getElementById('status-dot').className = 'status-dot offline';
-    toast('Erro ao conectar banco: ' + e.message, true);
+    document.getElementById('load-txt').textContent = 'Erro: ' + e.message;
+    setTimeout(() => { hideLoading(); document.getElementById('setup-screen').style.display = 'flex'; }, 1800);
   }
 }
 function hideLoading() {
@@ -1091,13 +1032,10 @@ function renderComandas() {
 }
 function buildCard(p, agora) {
   const min = Math.floor((agora - p.inicio) / 60000);
-  const pct = Math.min(100, Math.round(min / URGENT_MIN * 100));
   const urgente = min >= URGENT_MIN, alerta = min >= ALERT_MIN && !urgente;
   const timerCls = urgente?'t-urg':alerta?'t-med':'t-ok';
-  const barColor = urgente?'var(--red)':alerta?'var(--accent)':'var(--green)';
   const h = Math.floor(min/60), m = min%60;
   const timerTxt = h>0 ? `${h}h${String(m).padStart(2,'0')}` : `${String(min).padStart(2,'0')}min`;
-  const metaLbl = urgente?'⚠️ ATRASADO':alerta?'Atenção':'Em preparo';
   const tipoCls = p.tipo==='delivery'?'badge-d':'badge-p';
   const tipoLbl = p.tipo==='delivery'?'🛵 Delivery':'✅ Própria';
   const isPago = p.pago === true;
@@ -1106,7 +1044,7 @@ function buildCard(p, agora) {
   const itensHtml = (p.itens||[]).map(it => {
     const qty = it.qty || 1;
     const addTexto = it.adicionais && it.adicionais.length
-      ? it.adicionais.map(a => `+${a.nome} (R$${(+a.preco).toFixed(2).replace('.',',')})`).join(', ')
+      ? it.adicionais.map(a => `+${a.nome}`).join(', ')
       : '';
     return `<div class="item-ln">
       <div class="item-top">
@@ -1140,7 +1078,10 @@ function buildCard(p, agora) {
         ${p.telefone?`<div class="cli-tel">📞 ${p.telefone}</div>`:''}
         ${p.endereco?`<div class="cli-end">📍 ${p.endereco}</div>`:''}
       </div>
-      <div class="badges"><span class="badge ${tipoCls}">${tipoLbl}</span></div>
+      <div class="badges">
+        <span class="badge ${tipoCls}">${tipoLbl}</span>
+        <span class="timer-val ${timerCls}" data-inicio="${p.inicio}" style="font-size:15px;letter-spacing:1px;">${timerTxt}</span>
+      </div>
     </div>
     <div class="card-itens">
       ${itensHtml}
@@ -1152,20 +1093,12 @@ function buildCard(p, agora) {
         <span class="total-num">R$ ${totalComFrete.toFixed(2).replace('.',',')}</span>
       </div>
       <button class="btn-desp" onclick="despachar('${p.id}','${p.nome}')">✅ Despachar Pedido</button>
-      <button class="btn-print-cmd" onclick="imprimirComanda('${p.id}')" style="width:100%;margin-top:8px;">🖨️ Imprimir Comanda</button>
-      <div class="card-mid" style="margin-top:10px;padding:0;">
-        <div class="timer-block">
-          <div class="timer-lbl-sm">Tempo</div>
-          <div class="timer-val ${timerCls}" data-inicio="${p.inicio}">${timerTxt}</div>
-        </div>
-        <div class="prog-wrap">
-          <div class="prog-label"><span>${metaLbl}</span><span>${pct}%</span></div>
-          <div class="prog-track"><div class="prog-fill" style="width:${pct}%;background:${barColor}"></div></div>
-        </div>
-      </div>
     </div>
     <div class="card-actions">
       ${pagoHtml}
+      <div class="actions-row">
+        <button class="btn-print-cmd" onclick="imprimirComanda('${p.id}')">🖨️ Imprimir Comanda</button>
+      </div>
     </div>
   </div>`;
 }
@@ -1200,182 +1133,43 @@ async function togglePago(id, atualPago) {
 
 function imprimirComanda(id) {
   const p = pedidos[id]; if (!p) return;
+  const hora = new Date(p.inicio).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  const data = new Date(p.inicio).toLocaleDateString('pt-BR');
+  const tipoLbl = p.tipo === 'delivery' ? '🛵 Delivery' : '✅ Entrega Própria';
   const totalComFrete = (p.total||0) + (p.frete||0);
 
   const itensHtml = (p.itens||[]).map(it => {
     const qty = it.qty||1;
-    // nome do item pode ser longo — quebra em duas linhas se precisar
-    const addsHtml = it.adicionais&&it.adicionais.length
-      ? it.adicionais.map(a =>
-          `<tr>
-            <td class="add-nome">+ ${a.nome}</td>
-            <td class="val">R$${(+a.preco).toFixed(2).replace('.',',')}</td>
-          </tr>`
-        ).join('')
-      : '';
-    const obsHtml = it.obs
-      ? `<tr><td colspan="2" class="obs">Obs: ${it.obs}</td></tr>`
-      : '';
-    return `
-      <tr class="item-row">
-        <td class="item-nome">${qty}x ${it.nome}</td>
-        <td class="val">R$${(+it.total).toFixed(2).replace('.',',')}</td>
-      </tr>${addsHtml}${obsHtml}`;
+    const adds = it.adicionais&&it.adicionais.length
+      ? `<div class="cp-item-detail">➕ ${it.adicionais.map(a=>a.nome).join(', ')}</div>` : '';
+    const obs = it.obs ? `<div class="cp-item-detail">⚠️ ${it.obs}</div>` : '';
+    return `<div class="cp-item">
+      <div class="cp-item-main"><span>${qty}x ${it.nome}</span><span>R$ ${(+it.total).toFixed(2).replace('.',',')}</span></div>
+      ${adds}${obs}
+    </div>`;
   }).join('');
 
-  const freteRow = p.frete > 0
-    ? `<tr><td class="item-nome">Frete</td><td class="val">R$${(+p.frete).toFixed(2).replace('.',',')}</td></tr>`
-    : '';
+  const freteHtml = (p.frete>0)
+    ? `<div class="cp-frete"><span>🚗 Frete</span><span>R$ ${(+p.frete).toFixed(2).replace('.',',')}</span></div>` : '';
 
-  const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <style>
-    /* ── Forçar tamanho de bobina 58mm ── */
-    @page {
-      size: 58mm auto;   /* largura fixa, altura automática */
-      margin: 0;         /* sem margem de página — controlamos via padding */
-    }
-
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-
-    html, body {
-      width: 58mm;
-      max-width: 58mm;
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 9pt;       /* tamanho ideal para 58mm */
-      color: #000;
-      background: #fff;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-    }
-
-    .wrap {
-      width: 58mm;
-      padding: 2mm 3mm;   /* margem interna: 3mm de cada lado = 52mm úteis */
-    }
-
-    /* ── Cabeçalho ── */
-    .logo {
-      font-size: 14pt;
-      font-weight: 900;
-      text-align: center;
-      letter-spacing: 3px;
-      margin-bottom: 2mm;
-    }
-
-    /* ── Separador ── */
-    .sep {
-      border: none;
-      border-top: 1px dashed #000;
-      margin: 2mm 0;
-    }
-
-    /* ── Dados do cliente ── */
-    .campo { font-size: 8.5pt; margin: 1mm 0; word-break: break-word; }
-    .campo b { font-weight: 900; }
-
-    /* ── Tabela de itens ── */
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
-    }
-    td { padding: 1mm 0; vertical-align: top; }
-
-    /* coluna nome: ocupa a maior parte */
-    .item-nome {
-      font-size: 8.5pt;
-      font-weight: 700;
-      width: 68%;
-      word-break: break-word;
-      line-height: 1.3;
-    }
-    /* coluna valor: alinhado à direita, não quebra */
-    .val {
-      font-size: 8.5pt;
-      font-weight: 700;
-      text-align: right;
-      white-space: nowrap;
-      width: 32%;
-    }
-
-    /* adicionais — levemente recuados */
-    .add-nome {
-      font-size: 7.5pt;
-      color: #333;
-      padding-left: 3mm;
-      word-break: break-word;
-      width: 68%;
-    }
-    .add-nome + .val { font-size: 7.5pt; color: #333; }
-
-    /* observação */
-    .obs {
-      font-size: 7pt;
-      color: #444;
-      font-style: italic;
-      padding-left: 3mm;
-      word-break: break-word;
-    }
-
-    /* ── Linha de total ── */
-    .total-row td {
-      border-top: 1px solid #000;
-      padding-top: 2mm;
-      font-size: 11pt;
-      font-weight: 900;
-    }
-  </style>
-</head>
-<body>
-<div class="wrap">
-
-  <div class="logo">*** XIS ***</div>
-
-  <div class="campo">Cliente: <b>${p.nome}</b></div>
-  ${p.telefone ? `<div class="campo">Tel: <b>${p.telefone}</b></div>` : ''}
-
-  <hr class="sep">
-
-  <table>
+  document.getElementById('comanda-print').innerHTML = `
+    <div class="cp-logo">🍔 XIS</div>
+    <div class="cp-sub">${data} às ${hora}</div>
+    <hr class="cp-sep">
+    <div class="cp-row"><span class="cp-lbl">Cliente</span><span><b>${p.nome}</b></span></div>
+    ${p.telefone?`<div class="cp-row"><span class="cp-lbl">Telefone</span><span>${p.telefone}</span></div>`:''}
+    ${p.endereco?`<div class="cp-row"><span class="cp-lbl">Endereço</span><span>${p.endereco}</span></div>`:''}
+    <hr class="cp-sep">
+    <div class="cp-items-title">Itens</div>
     ${itensHtml}
-    ${freteRow ? `<tr><td colspan="2"><hr class="sep" style="margin:1mm 0"></td></tr>${freteRow}` : ''}
-    <tr><td colspan="2" style="padding:1mm 0;"></td></tr>
-    <tr class="total-row">
-      <td class="item-nome">TOTAL</td>
-      <td class="val">R$${totalComFrete.toFixed(2).replace('.',',')}</td>
-    </tr>
-  </table>
+    <hr class="cp-sep">
+    ${freteHtml}
+    <div class="cp-total"><span>TOTAL</span><span>R$ ${totalComFrete.toFixed(2).replace('.',',')}</span></div>
+  `;
 
-</div>
-<script>
-  window.onload = function() {
-    window.print();
-  };
-<\/script>
-</body>
-</html>`;
-
-  // Iframe oculto — imprime apenas seu próprio conteúdo, sem afetar a página
-  const frame = document.createElement('iframe');
-  frame.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:58mm;height:1px;border:none;visibility:hidden;';
-  document.body.appendChild(frame);
-  const doc = frame.contentDocument || frame.contentWindow.document;
-  doc.open();
-  doc.write(html);
-  doc.close();
-  // Fallback: se onload não disparar, tenta direto
-  setTimeout(() => {
-    try {
-      frame.contentWindow.focus();
-      frame.contentWindow.print();
-    } catch(e) {}
-    setTimeout(() => {
-      try { document.body.removeChild(frame); } catch(e) {}
-    }, 2000);
-  }, 500);
+  document.body.classList.add('print-comanda');
+  window.print();
+  document.body.classList.remove('print-comanda');
 }
 
 // ══════════════════════════════════════════════
@@ -1525,7 +1319,8 @@ function calcTotal() {
   }
   const freteEl = document.getElementById('f-frete');
   const frete = freteEl ? (parseFloat(freteEl.value) || 0) : 0;
-  document.getElementById('total-val').textContent = 'R$ ' + (tot + frete).toFixed(2).replace('.',',');
+  tot += frete;
+  document.getElementById('total-val').textContent = 'R$ ' + tot.toFixed(2).replace('.',',');
 }
 
 document.querySelectorAll('input[name="tipo"]').forEach(r => r.addEventListener('change', renderMenu));
@@ -1558,7 +1353,7 @@ async function lancar() {
 
   const freteEl = document.getElementById('f-frete');
   const frete = parseFloat(freteEl?.value) || 0;
-  // total = só itens (sem frete). frete é salvo separado e somado na exibição.
+  total += frete;
 
   const btn = document.getElementById('btn-lancar');
   btn.disabled = true; btn.textContent = 'Enviando...';
@@ -1724,101 +1519,12 @@ function toast(msg, err=false) {
 }
 
 // ══════════════════════════════════════════════
-// AUTENTICAÇÃO — Firebase Auth (email/senha)
-// Credenciais gerenciadas no console do Firebase:
-// Authentication → Users → Adicionar usuário
-// ══════════════════════════════════════════════
-let auth = null;
-
-function mostrarLogin() {
-  document.getElementById('app').style.display = 'none';
-  document.getElementById('setup-screen').style.display = 'none';
-  document.getElementById('login-screen').style.display = 'flex';
-  setTimeout(() => document.getElementById('l-email').focus(), 100);
-}
-
-function mostrarApp() {
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('app').style.display = '';
-  const btnSom = document.getElementById('btn-som');
-  if (btnSom) { btnSom.textContent = somAtivo ? '🔔' : '🔕'; btnSom.title = somAtivo ? 'Mutar som' : 'Ativar som'; }
-  renderMenu();
-  setDefaultDates();
-  // Inicia o banco só uma vez
-  if (!db) initFirebase();
-}
-
-function fazerLogin() {
-  const email = document.getElementById('l-email').value.trim();
-  const pass  = document.getElementById('l-pass').value;
-  const erro  = document.getElementById('login-erro');
-  const btn   = document.querySelector('.login-btn');
-
-  if (!email || !pass) { erro.textContent = 'Preencha e-mail e senha.'; return; }
-
-  erro.textContent = '';
-  btn.disabled = true;
-  btn.textContent = 'Entrando...';
-
-  auth.signInWithEmailAndPassword(email, pass)
-    .then(() => {
-      btn.textContent = 'Entrar';
-      document.getElementById('l-pass').value = '';
-    })
-    .catch(e => {
-      btn.disabled = false;
-      btn.textContent = 'Entrar';
-      document.getElementById('l-pass').value = '';
-      document.getElementById('l-pass').focus();
-      const msgs = {
-        'auth/user-not-found':    'Usuário não encontrado.',
-        'auth/wrong-password':    'Senha incorreta.',
-        'auth/invalid-email':     'E-mail inválido.',
-        'auth/too-many-requests': 'Muitas tentativas. Tente mais tarde.',
-        'auth/invalid-credential':'E-mail ou senha incorretos.',
-      };
-      erro.textContent = msgs[e.code] || 'Erro ao entrar. Tente novamente.';
-    });
-}
-
-function fazerLogout() {
-  if (!confirm('Deseja sair do sistema?')) return;
-  auth.signOut().catch(e => toast('Erro ao sair: ' + e.message, true));
-}
-
-// ══════════════════════════════════════════════
 // BOOT
 // ══════════════════════════════════════════════
 window.addEventListener('load', () => {
   const cfg = getConfig();
-
-  if (!cfg) {
-    // Sem config Firebase → mostra setup antes de qualquer coisa
-    document.getElementById('app').style.display = 'none';
-    document.getElementById('login-screen').style.display = 'none';
-    document.getElementById('setup-screen').style.display = 'flex';
-    return;
-  }
-
-  try {
-    // initializeApp uma única vez aqui
-    firebase.initializeApp(cfg);
-    auth = firebase.auth();
-    auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
-  } catch(e) {
-    console.error('Firebase init erro:', e);
-    toast('Erro ao inicializar Firebase: ' + e.message, true);
-    return;
-  }
-
-  // onAuthStateChanged decide o que mostrar — único ponto de controle
-  auth.onAuthStateChanged(user => {
-    if (user) {
-      mostrarApp();
-    } else {
-      mostrarLogin();
-    }
-  });
+  if (!cfg) { hideLoading(); document.getElementById('setup-screen').style.display = 'flex'; }
+  else initFirebase(cfg);
 });
 </script>
 </body>
