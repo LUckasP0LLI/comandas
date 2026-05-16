@@ -1076,7 +1076,7 @@ function buildCard(p, agora) {
   const tipoCls = p.tipo==='delivery'?'badge-d':'badge-p';
   const tipoLbl = p.tipo==='delivery'?'🛵 Delivery':'✅ Própria';
   const isPago = p.pago === true;
-  const totalComFrete = (p.total||0) + (p.frete||0);
+  const totalFinal = p.total || 0; // já inclui frete desde a última versão
 
   const itensHtml = (p.itens||[]).map(it => {
     const qty = it.qty || 1;
@@ -1124,7 +1124,7 @@ function buildCard(p, agora) {
     <div class="card-bot">
       <div class="total-ln">
         <span class="total-lbl">Total${p.frete>0?' c/ frete':''}</span>
-        <span class="total-num">R$ ${totalComFrete.toFixed(2).replace('.',',')}</span>
+        <span class="total-num">R$ ${totalFinal.toFixed(2).replace('.',',')}</span>
       </div>
       <button class="btn-desp" onclick="despachar('${p.id}','${p.nome}')">✅ Despachar Pedido</button>
       <button class="btn-print-cmd" onclick="imprimirComanda('${p.id}')" style="width:100%;margin-top:8px;">🖨️ Imprimir Comanda</button>
@@ -1175,22 +1175,20 @@ async function togglePago(id, atualPago) {
 
 function imprimirComanda(id) {
   const p = pedidos[id]; if (!p) return;
-  const totalComFrete = (p.total||0) + (p.frete||0);
+  const totalFinal = p.total || 0; // já inclui frete
 
+  // ── Itens ──
   const itensHtml = (p.itens||[]).map(it => {
-    const qty = it.qty||1;
-    // nome do item pode ser longo — quebra em duas linhas se precisar
-    const addsHtml = it.adicionais&&it.adicionais.length
+    const qty = it.qty || 1;
+    const addsHtml = (it.adicionais||[]).length
       ? it.adicionais.map(a =>
           `<tr>
-            <td class="add-nome">+ ${a.nome}</td>
+            <td class="add-nome">  + ${a.nome}</td>
             <td class="val">R$${(+a.preco).toFixed(2).replace('.',',')}</td>
-          </tr>`
-        ).join('')
+          </tr>`).join('')
       : '';
     const obsHtml = it.obs
-      ? `<tr><td colspan="2" class="obs">Obs: ${it.obs}</td></tr>`
-      : '';
+      ? `<tr><td colspan="2" class="obs">  Obs: ${it.obs}</td></tr>` : '';
     return `
       <tr class="item-row">
         <td class="item-nome">${qty}x ${it.nome}</td>
@@ -1198,142 +1196,174 @@ function imprimirComanda(id) {
       </tr>${addsHtml}${obsHtml}`;
   }).join('');
 
-  const freteRow = p.frete > 0
-    ? `<tr><td class="item-nome">Frete</td><td class="val">R$${(+p.frete).toFixed(2).replace('.',',')}</td></tr>`
-    : '';
+  const freteRow = (p.frete > 0)
+    ? `<tr><td class="item-nome">Taxa de entrega</td>
+       <td class="val">R$${(+p.frete).toFixed(2).replace('.',',')}</td></tr>` : '';
 
   const html = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <style>
-    /* ── Forçar tamanho de bobina 58mm ── */
     @page {
-      size: 58mm auto;   /* largura fixa, altura automática */
-      margin: 0;         /* sem margem de página — controlamos via padding */
+      size: 58mm auto;
+      margin: 0;
     }
-
     * { box-sizing: border-box; margin: 0; padding: 0; }
-
     html, body {
       width: 58mm;
       max-width: 58mm;
       font-family: 'Courier New', Courier, monospace;
-      font-size: 9pt;       /* tamanho ideal para 58mm */
+      font-size: 8.5pt;
       color: #000;
       background: #fff;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
+    .wrap { width: 58mm; padding: 3mm 3mm 6mm; }
 
-    .wrap {
-      width: 58mm;
-      padding: 2mm 3mm;   /* margem interna: 3mm de cada lado = 52mm úteis */
-    }
-
-    /* ── Cabeçalho ── */
-    .logo {
-      font-size: 14pt;
+    /* Cabeçalho da empresa */
+    .emp-nome {
+      font-size: 11pt;
       font-weight: 900;
       text-align: center;
-      letter-spacing: 3px;
+      letter-spacing: 1px;
       margin-bottom: 2mm;
     }
-
-    /* ── Separador ── */
-    .sep {
-      border: none;
-      border-top: 1px dashed #000;
-      margin: 2mm 0;
+    .emp-info {
+      font-size: 7pt;
+      text-align: center;
+      line-height: 1.6;
+      margin-bottom: 1mm;
     }
 
-    /* ── Dados do cliente ── */
-    .campo { font-size: 8.5pt; margin: 1mm 0; word-break: break-word; }
-    .campo b { font-weight: 900; }
+    /* Separadores */
+    .sep { border: none; border-top: 1px dashed #000; margin: 2mm 0; }
+    .sep-solid { border: none; border-top: 1px solid #000; margin: 2mm 0; }
 
-    /* ── Tabela de itens ── */
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
-    }
-    td { padding: 1mm 0; vertical-align: top; }
+    /* Título de seção */
+    .sec { font-size: 7pt; font-weight: 700; letter-spacing: 1px; margin: 1mm 0 0.5mm; }
 
-    /* coluna nome: ocupa a maior parte */
+    /* Dados do cliente */
+    .cli { font-size: 8pt; margin: 0.8mm 0; word-break: break-word; }
+    .cli b { font-weight: 900; }
+
+    /* Data/hora */
+    .datetime { font-size: 7pt; text-align: center; color: #333; margin-bottom: 1mm; }
+
+    /* Tabela de itens */
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    td { padding: 0.8mm 0; vertical-align: top; }
+
     .item-nome {
-      font-size: 8.5pt;
+      font-size: 8pt;
       font-weight: 700;
-      width: 68%;
+      width: 65%;
       word-break: break-word;
       line-height: 1.3;
     }
-    /* coluna valor: alinhado à direita, não quebra */
     .val {
-      font-size: 8.5pt;
+      font-size: 8pt;
       font-weight: 700;
       text-align: right;
       white-space: nowrap;
-      width: 32%;
+      width: 35%;
     }
-
-    /* adicionais — levemente recuados */
     .add-nome {
-      font-size: 7.5pt;
-      color: #333;
-      padding-left: 3mm;
+      font-size: 7pt;
+      color: #222;
+      width: 65%;
       word-break: break-word;
-      width: 68%;
+      line-height: 1.3;
     }
-    .add-nome + .val { font-size: 7.5pt; color: #333; }
-
-    /* observação */
+    .add-nome + .val { font-size: 7pt; color: #222; }
     .obs {
       font-size: 7pt;
-      color: #444;
+      color: #333;
       font-style: italic;
-      padding-left: 3mm;
       word-break: break-word;
     }
 
-    /* ── Linha de total ── */
+    /* Total */
     .total-row td {
       border-top: 1px solid #000;
       padding-top: 2mm;
       font-size: 11pt;
       font-weight: 900;
     }
+
+    /* Rodapé */
+    .footer {
+      text-align: center;
+      font-size: 7pt;
+      color: #333;
+      margin-top: 3mm;
+      line-height: 1.6;
+    }
   </style>
 </head>
 <body>
 <div class="wrap">
 
-  <div class="logo">*** XIS ***</div>
+  <!-- CABEÇALHO EMPRESA -->
+  <div class="emp-nome">CASALZAO LANCHES</div>
+  <div class="emp-info">
+    Tel: (51) 9445-8213<br>
+    CNPJ: 46.689.500/0001-83<br>
+    Av. Manoel Jose Bras, 148 - Santos Dumont<br>
+    Sao Leopoldo - RS  CEP: 93113-118
+  </div>
 
-  <div class="campo">Cliente: <b>${p.nome}</b></div>
-  ${p.telefone ? `<div class="campo">Tel: <b>${p.telefone}</b></div>` : ''}
+  <hr class="sep-solid">
+
+  <div class="datetime">${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</div>
+  <div class="emp-info">${p.tipo === 'delivery' ? '*** DELIVERY ***' : '*** RETIRADA ***'}</div>
 
   <hr class="sep">
 
+  <!-- DADOS DO CLIENTE -->
+  <div class="sec">CLIENTE</div>
+  <div class="cli">Nome: <b>${p.nome}</b></div>
+  ${p.telefone ? `<div class="cli">Tel: <b>${p.telefone}</b></div>` : ''}
+  ${p.endereco ? `<div class="cli">End: <b>${p.endereco}</b></div>` : ''}
+
+  <hr class="sep">
+
+  <!-- ITENS -->
+  <div class="sec">ITENS DO PEDIDO</div>
   <table>
+    <tr>
+      <td class="item-nome" style="font-size:7pt;font-weight:400;color:#555;">Descricao</td>
+      <td class="val" style="font-size:7pt;font-weight:400;color:#555;">Valor</td>
+    </tr>
     ${itensHtml}
-    ${freteRow ? `<tr><td colspan="2"><hr class="sep" style="margin:1mm 0"></td></tr>${freteRow}` : ''}
+    ${freteRow ? `
+    <tr><td colspan="2"><hr class="sep" style="margin:1.5mm 0;"></td></tr>
+    ${freteRow}` : ''}
     <tr><td colspan="2" style="padding:1mm 0;"></td></tr>
     <tr class="total-row">
       <td class="item-nome">TOTAL</td>
-      <td class="val">R$${totalComFrete.toFixed(2).replace('.',',')}</td>
+      <td class="val">R$${totalFinal.toFixed(2).replace('.',',')}</td>
     </tr>
   </table>
 
+  <hr class="sep">
+
+  <!-- FORMA DE PAGAMENTO -->
+  <div class="cli">Pagamento: <b>${p.pagamento || '-'}</b></div>
+
+  <div class="footer">
+    Obrigado pela preferencia!<br>
+    Casalzao Lanches
+  </div>
+
 </div>
 <script>
-  window.onload = function() {
-    window.print();
-  };
+  window.onload = function() { window.print(); };
 <\/script>
 </body>
 </html>`;
 
-  // Iframe oculto — imprime apenas seu próprio conteúdo, sem afetar a página
   const frame = document.createElement('iframe');
   frame.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:58mm;height:1px;border:none;visibility:hidden;';
   document.body.appendChild(frame);
@@ -1341,15 +1371,9 @@ function imprimirComanda(id) {
   doc.open();
   doc.write(html);
   doc.close();
-  // Fallback: se onload não disparar, tenta direto
   setTimeout(() => {
-    try {
-      frame.contentWindow.focus();
-      frame.contentWindow.print();
-    } catch(e) {}
-    setTimeout(() => {
-      try { document.body.removeChild(frame); } catch(e) {}
-    }, 2000);
+    try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch(e) {}
+    setTimeout(() => { try { document.body.removeChild(frame); } catch(e) {} }, 2000);
   }, 500);
 }
 
@@ -1404,9 +1428,6 @@ function renderMenu() {
   });
 
   box.innerHTML = html;
-  // live frete recalc
-  const freteEl = document.getElementById('f-frete');
-  if (freteEl) freteEl.addEventListener('input', calcTotal);
   calcTotal();
 }
 
@@ -1503,6 +1524,9 @@ function calcTotal() {
   document.getElementById('total-val').textContent = 'R$ ' + (tot + frete).toFixed(2).replace('.',',');
 }
 
+// Listener único para o frete — evita duplicação ao re-renderizar menu
+document.getElementById('f-frete').addEventListener('input', calcTotal);
+
 document.querySelectorAll('input[name="tipo"]').forEach(r => r.addEventListener('change', renderMenu));
 
 async function lancar() {
@@ -1533,7 +1557,7 @@ async function lancar() {
 
   const freteEl = document.getElementById('f-frete');
   const frete = parseFloat(freteEl?.value) || 0;
-  // total = só itens (sem frete). frete é salvo separado e somado na exibição.
+  const totalFinal = total + frete; // total já inclui frete — exibição usa p.total direto
 
   const btn = document.getElementById('btn-lancar');
   btn.disabled = true; btn.textContent = 'Enviando...';
@@ -1541,7 +1565,7 @@ async function lancar() {
     await pedidosRef.push({
       nome, telefone: document.getElementById('f-tel').value.trim(),
       endereco: document.getElementById('f-end').value.trim(),
-      pagamento: pag, tipo, itens, frete, total, inicio: Date.now()
+      pagamento: pag, tipo, itens, frete, total: totalFinal, inicio: Date.now()
     });
     toast('Pedido lançado! 🚀');
     document.getElementById('f-nome').value = '';
@@ -1567,11 +1591,12 @@ function renderHistorico() {
   if (!lista.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px 0">Nenhum ainda hoje.</div>'; return; }
   el.innerHTML = lista.map(h => {
     const hora = new Date(h.despachado).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    const total = h.total || 0;
     return `<div class="hist-item">
       <span class="h-nome">${h.nome}</span>
       <span>${h.tipo==='delivery'?'🛵':'✅'}</span>
       <span class="h-tempo">${h.tempoMin}min · ${hora}</span>
-      <span class="h-total">R$ ${h.total.toFixed(2).replace('.',',')}</span>
+      <span class="h-total">R$ ${total.toFixed(2).replace('.',',')}</span>
     </div>`;
   }).join('');
 }
