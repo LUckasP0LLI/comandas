@@ -1206,13 +1206,13 @@ function imprimirComanda(id) {
   <meta charset="UTF-8">
   <style>
     @page {
-      size: 58mm auto;
+      size: 57mm auto;
       margin: 0;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body {
-      width: 58mm;
-      max-width: 58mm;
+      width: 57mm;
+      max-width: 57mm;
       font-family: 'Courier New', Courier, monospace;
       font-size: 8.5pt;
       color: #000;
@@ -1364,8 +1364,15 @@ function imprimirComanda(id) {
 </body>
 </html>`;
 
+  // Electron: impressão nativa direta na térmica (sem dialog)
+  if (window.electronAPI) {
+    window.electronAPI.printThermal(html);
+    return;
+  }
+
+  // Navegador: iframe isolado
   const frame = document.createElement('iframe');
-  frame.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:58mm;height:1px;border:none;visibility:hidden;';
+  frame.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:57mm;height:1px;border:none;visibility:hidden;';
   document.body.appendChild(frame);
   const doc = frame.contentDocument || frame.contentWindow.document;
   doc.open();
