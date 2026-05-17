@@ -1127,7 +1127,10 @@ function buildCard(p, agora) {
         <span class="total-num">R$ ${totalFinal.toFixed(2).replace('.',',')}</span>
       </div>
       <button class="btn-desp" onclick="despachar('${p.id}','${p.nome}')">✅ Despachar Pedido</button>
-      <button class="btn-print-cmd" onclick="imprimirComanda('${p.id}')" style="width:100%;margin-top:8px;">🖨️ Imprimir Comanda</button>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+        <button class="btn-print-cmd" onclick="imprimirComanda('${p.id}')">🖨️ Imprimir</button>
+        <button class="btn-print-cmd" onclick="salvarPDFComanda('${p.id}')" style="border-color:#5b9ce8;color:#5b9ce8;">📄 Salvar PDF</button>
+      </div>
       <div class="card-mid" style="margin-top:10px;padding:0;">
         <div class="timer-block">
           <div class="timer-lbl-sm">Tempo</div>
@@ -1382,6 +1385,136 @@ function imprimirComanda(id) {
     try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch(e) {}
     setTimeout(() => { try { document.body.removeChild(frame); } catch(e) {} }, 2000);
   }, 500);
+}
+
+function salvarPDFComanda(id) {
+  // Gera o mesmo HTML do cupom e abre em nova aba para salvar como PDF
+  const p = pedidos[id]; if (!p) return;
+  const totalFinal = p.total || 0;
+
+  const itensHtml = (p.itens||[]).map(it => {
+    const qty = it.qty || 1;
+    const addsHtml = (it.adicionais||[]).length
+      ? it.adicionais.map(a =>
+          `<tr>
+            <td class="add-nome">  + ${a.nome}</td>
+            <td class="val">R$${(+a.preco).toFixed(2).replace('.',',')}</td>
+          </tr>`).join('')
+      : '';
+    const obsHtml = it.obs
+      ? `<tr><td colspan="2" class="obs">  Obs: ${it.obs}</td></tr>` : '';
+    return `
+      <tr>
+        <td class="item-nome">${qty}x ${it.nome}</td>
+        <td class="val">R$${(+it.total).toFixed(2).replace('.',',')}</td>
+      </tr>${addsHtml}${obsHtml}`;
+  }).join('');
+
+  const freteRow = (p.frete > 0)
+    ? `<tr><td class="item-nome">Taxa de entrega</td>
+       <td class="val">R$${(+p.frete).toFixed(2).replace('.',',')}</td></tr>` : '';
+
+  // HTML idêntico ao cupom de impressão — mesma aparência no PDF
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Comanda — ${p.nome}</title>
+  <style>
+    @page {
+      size: 57mm auto;
+      margin: 0;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 57mm;
+      max-width: 57mm;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 8.5pt;
+      color: #000;
+      background: #fff;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .wrap { width: 57mm; padding: 3mm 3mm 6mm; }
+    .emp-nome { font-size: 11pt; font-weight: 900; text-align: center; letter-spacing: 1px; margin-bottom: 2mm; }
+    .emp-info { font-size: 7pt; text-align: center; line-height: 1.6; margin-bottom: 1mm; }
+    .sep { border: none; border-top: 1px dashed #000; margin: 2mm 0; }
+    .sep-solid { border: none; border-top: 1px solid #000; margin: 2mm 0; }
+    .sec { font-size: 7pt; font-weight: 700; letter-spacing: 1px; margin: 1mm 0 0.5mm; }
+    .cli { font-size: 8pt; margin: 0.8mm 0; word-break: break-word; }
+    .cli b { font-weight: 900; }
+    .datetime { font-size: 7pt; text-align: center; color: #333; margin-bottom: 1mm; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    td { padding: 0.8mm 0; vertical-align: top; }
+    .item-nome { font-size: 8pt; font-weight: 700; width: 65%; word-break: break-word; line-height: 1.3; }
+    .val { font-size: 8pt; font-weight: 700; text-align: right; white-space: nowrap; width: 35%; }
+    .add-nome { font-size: 7pt; color: #222; width: 65%; word-break: break-word; }
+    .add-nome + .val { font-size: 7pt; color: #222; }
+    .obs { font-size: 7pt; color: #333; font-style: italic; word-break: break-word; }
+    .total-row td { border-top: 1px solid #000; padding-top: 2mm; font-size: 11pt; font-weight: 900; }
+    .footer { text-align: center; font-size: 7pt; color: #333; margin-top: 3mm; line-height: 1.6; }
+
+    /* Botão visível só na tela, some no PDF */
+    .no-print { text-align: center; margin: 4mm 0; }
+    .btn-pdf {
+      font-family: 'Courier New', monospace; font-size: 8pt;
+      background: #000; color: #fff; border: none;
+      padding: 2mm 4mm; border-radius: 2mm; cursor: pointer;
+    }
+    @media print { .no-print { display: none; } }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="emp-nome">CASALZAO LANCHES</div>
+  <div class="emp-info">
+    Tel: (51) 9445-8213<br>
+    CNPJ: 46.689.500/0001-83<br>
+    Av. Manoel Jose Bras, 148 - Santos Dumont<br>
+    Sao Leopoldo - RS  CEP: 93113-118
+  </div>
+  <hr class="sep-solid">
+  <div class="datetime">${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</div>
+  <div class="emp-info">${p.tipo === 'delivery' ? '*** DELIVERY ***' : '*** RETIRADA ***'}</div>
+  <hr class="sep">
+  <div class="sec">CLIENTE</div>
+  <div class="cli">Nome: <b>${p.nome}</b></div>
+  ${p.telefone ? `<div class="cli">Tel: <b>${p.telefone}</b></div>` : ''}
+  ${p.endereco ? `<div class="cli">End: <b>${p.endereco}</b></div>` : ''}
+  <hr class="sep">
+  <div class="sec">ITENS DO PEDIDO</div>
+  <table>
+    <tr>
+      <td class="item-nome" style="font-size:7pt;font-weight:400;color:#555;">Descricao</td>
+      <td class="val" style="font-size:7pt;font-weight:400;color:#555;">Valor</td>
+    </tr>
+    ${itensHtml}
+    ${freteRow ? `<tr><td colspan="2"><hr class="sep" style="margin:1.5mm 0;"></td></tr>${freteRow}` : ''}
+    <tr><td colspan="2" style="padding:1mm 0;"></td></tr>
+    <tr class="total-row">
+      <td class="item-nome">TOTAL</td>
+      <td class="val">R$${totalFinal.toFixed(2).replace('.',',')}</td>
+    </tr>
+  </table>
+  <hr class="sep">
+  <div class="cli">Pagamento: <b>${p.pagamento || '-'}</b></div>
+  <div class="footer">Obrigado pela preferencia!<br>Casalzao Lanches</div>
+
+  <!-- Botão visível só na tela para salvar PDF -->
+  <div class="no-print" style="margin-top:6mm;">
+    <button class="btn-pdf" onclick="window.print()">Salvar como PDF / Imprimir</button>
+  </div>
+</div>
+</body>
+</html>`;
+
+  // Abre em nova aba — o usuário vê o cupom e pode Ctrl+P → Salvar como PDF
+  const nova = window.open('', '_blank');
+  if (!nova) { toast('Permita popups para esta página para salvar PDF.', true); return; }
+  nova.document.open();
+  nova.document.write(html);
+  nova.document.close();
 }
 
 // ══════════════════════════════════════════════
