@@ -1127,9 +1127,10 @@ function buildCard(p, agora) {
         <span class="total-num">R$ ${totalFinal.toFixed(2).replace('.',',')}</span>
       </div>
       <button class="btn-desp" onclick="despachar('${p.id}','${p.nome}')">✅ Despachar Pedido</button>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px;">
         <button class="btn-print-cmd" onclick="imprimirComanda('${p.id}')">🖨️ Imprimir</button>
-        <button class="btn-print-cmd" onclick="salvarPDFComanda('${p.id}')" style="border-color:#5b9ce8;color:#5b9ce8;">📄 Salvar PDF</button>
+        <button class="btn-print-cmd" onclick="salvarPDFComanda('${p.id}')" style="border-color:#5b9ce8;color:#5b9ce8;">📄 PDF</button>
+        <button class="btn-print-cmd" onclick="imprimirBluetooth('${p.id}')" style="border-color:#3b82f6;color:#3b82f6;">🔵 BT</button>
       </div>
       <div class="card-mid" style="margin-top:10px;padding:0;">
         <div class="timer-block">
@@ -1668,6 +1669,213 @@ function toast(msg, err=false) {
   t.textContent = msg;
   t.className = 'toast show' + (err?' err':'');
   setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ══════════════════════════════════════════════
+// IMPRESSÃO BLUETOOTH — ESC/POS
+// Compatível com Chrome Android. Não funciona no iOS/Firefox.
+// ══════════════════════════════════════════════
+
+// ── Codepage: converte caracteres PT-BR para ISO-8859-1 (térmica) ──────────
+function charByte(ch) {
+  const pt = {'ã':0xe3,'â':0xe2,'à':0xe0,'á':0xe1,'ä':0xe4,
+              'Ã':0xc3,'Â':0xc2,'À':0xc0,'Á':0xc1,
+              'é':0xe9,'ê':0xea,'è':0xe8,'É':0xc9,'Ê':0xca,
+              'í':0xed,'î':0xee,'Í':0xcd,
+              'ó':0xf3,'õ':0xf5,'ô':0xf4,'Ó':0xd3,'Õ':0xd5,'Ô':0xd4,
+              'ú':0xfa,'ü':0xfc,'Ú':0xda,
+              'ç':0xe7,'Ç':0xc7};
+  const c = ch.charCodeAt(0);
+  if (c < 128) return c;
+  return pt[ch] || 0x3f; // '?' para desconhecidos
+}
+
+// ── Construtor ESC/POS ──────────────────────────────────────────────────────
+class EscPos {
+  constructor() { this.b = []; }
+  _p(...v)       { this.b.push(...v); return this; }
+  init()         { return this._p(0x1b,0x40); }
+  cp850()        { return this._p(0x1b,0x74,0x02); } // codepage 850 (latin)
+  center()       { return this._p(0x1b,0x61,0x01); }
+  left()         { return this._p(0x1b,0x61,0x00); }
+  bold(on)       { return this._p(0x1b,0x45,on?1:0); }
+  dblH(on)       { return this._p(0x1b,0x21,on?0x10:0x00); }
+  dblWH(on)      { return this._p(0x1d,0x21,on?0x11:0x00); }
+  lf(n=1)        { for(let i=0;i<n;i++) this.b.push(0x0a); return this; }
+  feed(n=3)      { return this._p(0x1b,0x64,n); }
+  cut()          { return this._p(0x1d,0x56,0x42,0x00); }
+
+  txt(s) {
+    for (const ch of String(s)) this.b.push(charByte(ch));
+    return this;
+  }
+
+  // Linha de separação
+  sep(ch='-', w=32) { return this.txt(ch.repeat(w)).lf(); }
+
+  // Duas colunas alinhadas numa linha de `w` chars
+  col2(left, right, w=32) {
+    const l = String(left), r = String(right);
+    const gap = w - l.length - r.length;
+    if (gap < 1) {
+      // Nome muito longo: quebra em duas linhas
+      const maxLeft = w - r.length - 1;
+      this.txt(l.substring(0,maxLeft)).lf();
+      this.txt(' '.repeat(w - r.length) + r).lf();
+    } else {
+      this.txt(l + ' '.repeat(gap) + r).lf();
+    }
+    return this;
+  }
+
+  bytes() { return new Uint8Array(this.b); }
+}
+
+// ── Monta dados do cupom em ESC/POS ────────────────────────────────────────
+function montarEscPos(p) {
+  const W = 32; // chars por linha para 57mm
+  const total = p.total || 0;
+  const esc = new EscPos();
+
+  esc.init().cp850()
+    // Cabeçalho
+    .center().bold(true).dblWH(true)
+    .txt('CASALZAO').lf()
+    .txt('LANCHES').lf()
+    .dblWH(false).bold(false)
+    .txt('Tel: (51) 9445-8213').lf()
+    .txt('CNPJ: 46.689.500/0001-83').lf()
+    .txt('Av.M.J.Bras,148-S.Dumont').lf()
+    .txt('Sao Leopoldo-RS 93113-118').lf()
+    .sep('=', W)
+    // Data e tipo
+    .txt(new Date().toLocaleDateString('pt-BR') + ' ' +
+         new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})).lf()
+    .bold(true).txt(p.tipo==='delivery'?'*** DELIVERY ***':'*** RETIRADA ***').lf().bold(false)
+    .sep('-', W)
+    // Cliente
+    .left().bold(true).txt('CLIENTE:').bold(false).lf()
+    .txt('Nome: '+p.nome).lf();
+  if (p.telefone) esc.txt('Tel: '+p.telefone).lf();
+  if (p.endereco) esc.txt('End: '+p.endereco).lf();
+
+  esc.sep('-', W)
+    .bold(true).txt('ITENS:').bold(false).lf()
+    .sep('-', W);
+
+  // Itens
+  (p.itens||[]).forEach(it => {
+    const qty = it.qty||1;
+    const val = 'R$'+(+it.total).toFixed(2).replace('.',',');
+    esc.col2(qty+'x '+it.nome, val, W);
+    (it.adicionais||[]).forEach(a => {
+      esc.col2('  +'+a.nome, 'R$'+(+a.preco).toFixed(2).replace('.',','), W);
+    });
+    if (it.obs) esc.txt('  Obs:'+it.obs).lf();
+  });
+
+  esc.sep('-', W);
+  if (p.frete > 0) {
+    esc.col2('Taxa de entrega','R$'+(+p.frete).toFixed(2).replace('.',','), W);
+    esc.sep('-', W);
+  }
+
+  // Total
+  esc.bold(true).dblH(true)
+    .col2('TOTAL','R$'+total.toFixed(2).replace('.',','), W)
+    .dblH(false).bold(false)
+    .sep('=', W)
+    .center()
+    .txt('Pagto: '+(p.pagamento||'-')).lf()
+    .lf()
+    .txt('Obrigado pela preferencia!').lf()
+    .txt('Casalzao Lanches').lf()
+    .feed(4).cut();
+
+  return esc.bytes();
+}
+
+// ── Estado da conexão BT ────────────────────────────────────────────────────
+let _btChar = null;
+let _btDevice = null;
+
+// UUIDs comuns de impressoras térmicas BT genéricas / Kapboom / Xprinter
+const BT_SERVICES = [
+  '000018f0-0000-1000-8000-00805f9b34fb',
+  'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
+  '0000ff00-0000-1000-8000-00805f9b34fb',
+  '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+];
+const BT_CHARS = [
+  '000018f1-0000-1000-8000-00805f9b34fb',
+  'bef8d6c9-9c21-4c9e-b632-bd58c1009f9f',
+  '0000ff02-0000-1000-8000-00805f9b34fb',
+  '49535343-8841-43f4-a8d4-ecbe34729bb3',
+];
+
+async function _btConectar() {
+  if (!navigator.bluetooth)
+    throw new Error('Web Bluetooth não suportado. Use Chrome no Android.');
+
+  toast('Buscando impressora...', false);
+  const device = await navigator.bluetooth.requestDevice({
+    acceptAllDevices: true,
+    optionalServices: BT_SERVICES,
+  });
+
+  const server = await device.gatt.connect();
+  _btDevice = device;
+
+  let service = null;
+  for (const uid of BT_SERVICES) {
+    try { service = await server.getPrimaryService(uid); break; } catch(e){}
+  }
+  if (!service) throw new Error('Servico de impressao nao encontrado.\nVerifique se a impressora esta ligada e pareada.');
+
+  let ch = null;
+  for (const uid of BT_CHARS) {
+    try { ch = await service.getCharacteristic(uid); break; } catch(e){}
+  }
+  if (!ch) throw new Error('Caracteristica de escrita nao encontrada.');
+
+  _btChar = ch;
+  toast('Impressora conectada! 🔵');
+  return true;
+}
+
+async function imprimirBluetooth(id) {
+  const p = pedidos[id]; if (!p) return;
+
+  if (!navigator.bluetooth) {
+    toast('Use o Chrome no Android para impressão Bluetooth.', true);
+    return;
+  }
+
+  try {
+    // Reconecta se necessário
+    if (!_btChar || !_btDevice?.gatt?.connected) {
+      await _btConectar();
+    }
+
+    const bytes = montarEscPos(p);
+    const CHUNK = 100; // bytes por pacote BLE (seguro para todos os MTUs)
+
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+      const slice = bytes.slice(i, i + CHUNK);
+      try {
+        await _btChar.writeValueWithoutResponse(slice);
+      } catch(e) {
+        await _btChar.writeValue(slice); // fallback para impressoras mais antigas
+      }
+      await new Promise(r => setTimeout(r, 40)); // pausa entre pacotes
+    }
+
+    toast('Impresso! 🖨️');
+  } catch(e) {
+    _btChar = null; // força reconexão na próxima
+    toast('Erro BT: ' + e.message, true);
+    console.error('Bluetooth print error:', e);
+  }
 }
 
 // ══════════════════════════════════════════════
