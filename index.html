@@ -1130,7 +1130,7 @@ function buildCard(p, agora) {
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px;">
         <button class="btn-print-cmd" onclick="imprimirComanda('${p.id}')">🖨️ Imprimir</button>
         <button class="btn-print-cmd" onclick="salvarPDFComanda('${p.id}')" style="border-color:#5b9ce8;color:#5b9ce8;">📄 PDF</button>
-        <button class="btn-print-cmd" onclick="imprimirRawBT('${p.id}')" style="border-color:#3b82f6;color:#3b82f6;">🔵 RawBT</button>
+        <button class="btn-print-cmd" onclick="imprimirCelular('${p.id}')" style="border-color:#3b82f6;color:#3b82f6;" id="btn-cel-${p.id}">${getBtnCelLabel()}</button>
       </div>
       <div class="card-mid" style="margin-top:10px;padding:0;">
         <div class="timer-block">
@@ -1823,6 +1823,49 @@ function imprimirRawBT(id) {
   setTimeout(() => document.body.removeChild(a), 1000);
 
   toast('Enviado para o RawBT! 🖨️');
+}
+
+// ── Detecção de plataforma ──────────────────────────────────────────────────
+const _isIOS     = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+const _isAndroid = /Android/.test(navigator.userAgent);
+
+function getBtnCelLabel() {
+  if (_isIOS)     return '🍎 iOS Print';
+  if (_isAndroid) return '🔵 RawBT';
+  return '📱 Mobile';
+}
+
+// ── Impressão no celular: Android → RawBT | iPhone → AirPrint ──────────────
+function imprimirCelular(id) {
+  if (_isAndroid) {
+    imprimirRawBT(id);
+    return;
+  }
+
+  if (_isIOS) {
+    // iOS Safari: abre o cupom formatado em popup e dispara window.print()
+    // que abre o painel nativo de compartilhamento/AirPrint do iPhone
+    const p = pedidos[id]; if (!p) return;
+    const html = gerarHtmlComanda(p, true); // modoImpressao = true → auto-print
+
+    const nova = window.open('', '_blank',
+      'width=400,height=600,menubar=no,toolbar=no,location=no,status=no');
+    if (!nova) {
+      // Popup bloqueado → fallback: abre o PDF no mesmo modo do salvarPDF
+      toast('Permita popups para imprimir no iPhone.', true);
+      salvarPDFComanda(id);
+      return;
+    }
+    nova.document.open();
+    nova.document.write(html);
+    nova.document.close();
+
+    toast('Toque em Compartilhar → Imprimir para enviar à térmica 🍎');
+    return;
+  }
+
+  // Desktop sem mobile: usa iframe normal
+  imprimirComanda(id);
 }
 
 // ══════════════════════════════════════════════
