@@ -1128,9 +1128,9 @@ function buildCard(p, agora) {
       </div>
       <button class="btn-desp" onclick="despachar('${p.id}','${p.nome}')">✅ Despachar Pedido</button>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px;">
-        <button class="btn-print-cmd" onclick="imprimirComanda('${p.id}')">🖨️ Imprimir</button>
+        <button class="btn-print-cmd" onclick="imprimirInteligente('${p.id}')">🖨️ Imprimir</button>
         <button class="btn-print-cmd" onclick="salvarPDFComanda('${p.id}')" style="border-color:#5b9ce8;color:#5b9ce8;">📄 PDF</button>
-        <button class="btn-print-cmd" onclick="imprimirCelular('${p.id}')" style="border-color:#3b82f6;color:#3b82f6;" id="btn-cel-${p.id}">${getBtnCelLabel()}</button>
+        <button class="btn-print-cmd" onclick="compartilharComanda('${p.id}')" style="border-color:#22c55e;color:#22c55e;">↗️ Enviar</button>
       </div>
       <div class="card-mid" style="margin-top:10px;padding:0;">
         <div class="timer-block">
@@ -1795,34 +1795,123 @@ function montarEscPos(p) {
   return esc.bytes();
 }
 
-// ── RawBT: envia ESC/POS via URL scheme rawbt:// ───────────────────────────
-// O RawBT intercepta a URL, pega os bytes e manda direto para a térmica BT.
-// Não abre dialog de PDF — imprime na comanda exatamente como no computador.
+// ── Detecção de plataforma ──────────────────────────────────────────────────
+const IS_IOS     = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+const IS_ANDROID = /Android/.test(navigator.userAgent);
+
+// ── Impressão inteligente — escolhe a estratégia certa por plataforma ───────
+function imprimirInteligente(id) {
+  if (IS_ANDROID) {
+    imprimirRawBT(id);          // Android: ESC/POS via RawBT (melhor qualidade)
+  } else if (IS_IOS) {
+    imprimirIOS(id);            // iPhone/iPad: nova aba + print dialog do iOS
+  } else {
+    imprimirComanda(id);        // Desktop: iframe oculto
+  }
+}
+
+// ── Android: RawBT URL scheme ───────────────────────────────────────────────
 function imprimirRawBT(id) {
   const p = pedidos[id]; if (!p) return;
+  const bytes = montarEscPos(p);
 
-  const bytes  = montarEscPos(p);
-
-  // Converte Uint8Array → base64 em blocos (evita estouro de pilha em arrays grandes)
   let bin = '';
   const CHUNK = 1024;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
+  for (let i = 0; i < bytes.length; i += CHUNK)
     bin += String.fromCharCode(...bytes.slice(i, i + CHUNK));
-  }
   const b64 = btoa(bin);
 
-  // Abre o RawBT com os dados — ele imprime automaticamente
-  const url = 'rawbt://' + b64;
-
-  // Tenta abrir via link oculto (mais confiável que window.location em alguns browsers)
   const a = document.createElement('a');
-  a.href = url;
+  a.href = 'rawbt://' + b64;
   a.style.display = 'none';
   document.body.appendChild(a);
   a.click();
   setTimeout(() => document.body.removeChild(a), 1000);
-
   toast('Enviado para o RawBT! 🖨️');
+}
+
+// ── iOS: abre nova aba com o cupom e dispara print dialog do sistema ─────────
+// Funciona com AirPrint ou com PrinterShare/Printooth instalados no iPhone.
+function imprimirIOS(id) {
+  const p = pedidos[id]; if (!p) return;
+
+  // Igual ao gerarHtmlComanda mas com print automático após carregar
+  const html = gerarHtmlComanda(p, false).replace(
+    '</body>',
+    `<script>
+      // iOS Safari precisa de um delay antes do print()
+      setTimeout(function(){ window.print(); }, 600);
+    <\/script>
+    </body>`
+  );
+
+  const nova = window.open('', '_blank');
+  if (!nova) {
+    // Popup bloqueado — usa salvarPDFComanda como fallback
+    toast('Popup bloqueado. Usando PDF...', true);
+    salvarPDFComanda(id);
+    return;
+  }
+  nova.document.open();
+  nova.document.write(html);
+  nova.document.close();
+}
+
+// ── Compartilhar via Web Share API (WhatsApp, Telegram, iMessage, etc.) ─────
+// Funciona em iOS Safari e Chrome Android nativamente.
+async function compartilharComanda(id) {
+  const p = pedidos[id]; if (!p) return;
+  const total = (p.total || 0).toFixed(2).replace('.', ',');
+
+  // Monta texto simples formatado para WhatsApp/Telegram
+  const linhas = [
+    '🍔 *CASALZÃO LANCHES*',
+    '──────────────────────',
+    `👤 *${p.nome}*`,
+  ];
+  if (p.telefone) linhas.push(`📞 ${p.telefone}`);
+  if (p.endereco) linhas.push(`📍 ${p.endereco}`);
+  linhas.push('──────────────────────');
+  linhas.push(p.tipo === 'delivery' ? '🛵 *DELIVERY*' : '✅ *RETIRADA*');
+  linhas.push('');
+  linhas.push('*ITENS:*');
+
+  (p.itens||[]).forEach(it => {
+    const qty = it.qty || 1;
+    const val = (+(it.total)).toFixed(2).replace('.', ',');
+    linhas.push(`${qty}x ${it.nome} — R$${val}`);
+    (it.adicionais||[]).forEach(a =>
+      linhas.push(`  ➕ ${a.nome} — R$${(+a.preco).toFixed(2).replace('.', ',')}`)
+    );
+    if (it.obs) linhas.push(`  ⚠️ ${it.obs}`);
+  });
+
+  linhas.push('──────────────────────');
+  if (p.frete > 0)
+    linhas.push(`🚗 Frete — R$${(+p.frete).toFixed(2).replace('.', ',')}`);
+  linhas.push(`💰 *TOTAL: R$${total}*`);
+  linhas.push('──────────────────────');
+  linhas.push(`💳 Pagamento: ${p.pagamento || '-'}`);
+  linhas.push('');
+  linhas.push('Obrigado pela preferência! 🍔');
+
+  const texto = linhas.join('\n');
+
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: `Comanda — ${p.nome}`, text: texto });
+    } catch(e) {
+      if (e.name !== 'AbortError') toast('Erro ao compartilhar.', true);
+    }
+  } else {
+    // Fallback: copia para a área de transferência
+    try {
+      await navigator.clipboard.writeText(texto);
+      toast('Copiado para área de transferência! 📋');
+    } catch(e) {
+      toast('Compartilhamento não suportado neste navegador.', true);
+    }
+  }
 }
 
 // ── Detecção de plataforma ──────────────────────────────────────────────────
