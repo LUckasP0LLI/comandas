@@ -1130,7 +1130,7 @@ function buildCard(p, agora) {
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px;">
         <button class="btn-print-cmd" onclick="imprimirComanda('${p.id}')">🖨️ Imprimir</button>
         <button class="btn-print-cmd" onclick="salvarPDFComanda('${p.id}')" style="border-color:#5b9ce8;color:#5b9ce8;">📄 PDF</button>
-        <button class="btn-print-cmd" onclick="imprimirBluetooth('${p.id}')" style="border-color:#3b82f6;color:#3b82f6;">🔵 BT</button>
+        <button class="btn-print-cmd" onclick="imprimirRawBT('${p.id}')" style="border-color:#3b82f6;color:#3b82f6;">🔵 RawBT</button>
       </div>
       <div class="card-mid" style="margin-top:10px;padding:0;">
         <div class="timer-block">
@@ -1795,87 +1795,34 @@ function montarEscPos(p) {
   return esc.bytes();
 }
 
-// ── Estado da conexão BT ────────────────────────────────────────────────────
-let _btChar = null;
-let _btDevice = null;
-
-// UUIDs comuns de impressoras térmicas BT genéricas / Kapboom / Xprinter
-const BT_SERVICES = [
-  '000018f0-0000-1000-8000-00805f9b34fb',
-  'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
-  '0000ff00-0000-1000-8000-00805f9b34fb',
-  '49535343-fe7d-4ae5-8fa9-9fafd205e455',
-];
-const BT_CHARS = [
-  '000018f1-0000-1000-8000-00805f9b34fb',
-  'bef8d6c9-9c21-4c9e-b632-bd58c1009f9f',
-  '0000ff02-0000-1000-8000-00805f9b34fb',
-  '49535343-8841-43f4-a8d4-ecbe34729bb3',
-];
-
-async function _btConectar() {
-  if (!navigator.bluetooth)
-    throw new Error('Web Bluetooth não suportado. Use Chrome no Android.');
-
-  toast('Buscando impressora...', false);
-  const device = await navigator.bluetooth.requestDevice({
-    acceptAllDevices: true,
-    optionalServices: BT_SERVICES,
-  });
-
-  const server = await device.gatt.connect();
-  _btDevice = device;
-
-  let service = null;
-  for (const uid of BT_SERVICES) {
-    try { service = await server.getPrimaryService(uid); break; } catch(e){}
-  }
-  if (!service) throw new Error('Servico de impressao nao encontrado.\nVerifique se a impressora esta ligada e pareada.');
-
-  let ch = null;
-  for (const uid of BT_CHARS) {
-    try { ch = await service.getCharacteristic(uid); break; } catch(e){}
-  }
-  if (!ch) throw new Error('Caracteristica de escrita nao encontrada.');
-
-  _btChar = ch;
-  toast('Impressora conectada! 🔵');
-  return true;
-}
-
-async function imprimirBluetooth(id) {
+// ── RawBT: envia ESC/POS via URL scheme rawbt:// ───────────────────────────
+// O RawBT intercepta a URL, pega os bytes e manda direto para a térmica BT.
+// Não abre dialog de PDF — imprime na comanda exatamente como no computador.
+function imprimirRawBT(id) {
   const p = pedidos[id]; if (!p) return;
 
-  if (!navigator.bluetooth) {
-    toast('Use o Chrome no Android para impressão Bluetooth.', true);
-    return;
+  const bytes  = montarEscPos(p);
+
+  // Converte Uint8Array → base64 em blocos (evita estouro de pilha em arrays grandes)
+  let bin = '';
+  const CHUNK = 1024;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode(...bytes.slice(i, i + CHUNK));
   }
+  const b64 = btoa(bin);
 
-  try {
-    // Reconecta se necessário
-    if (!_btChar || !_btDevice?.gatt?.connected) {
-      await _btConectar();
-    }
+  // Abre o RawBT com os dados — ele imprime automaticamente
+  const url = 'rawbt://' + b64;
 
-    const bytes = montarEscPos(p);
-    const CHUNK = 100; // bytes por pacote BLE (seguro para todos os MTUs)
+  // Tenta abrir via link oculto (mais confiável que window.location em alguns browsers)
+  const a = document.createElement('a');
+  a.href = url;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => document.body.removeChild(a), 1000);
 
-    for (let i = 0; i < bytes.length; i += CHUNK) {
-      const slice = bytes.slice(i, i + CHUNK);
-      try {
-        await _btChar.writeValueWithoutResponse(slice);
-      } catch(e) {
-        await _btChar.writeValue(slice); // fallback para impressoras mais antigas
-      }
-      await new Promise(r => setTimeout(r, 40)); // pausa entre pacotes
-    }
-
-    toast('Impresso! 🖨️');
-  } catch(e) {
-    _btChar = null; // força reconexão na próxima
-    toast('Erro BT: ' + e.message, true);
-    console.error('Bluetooth print error:', e);
-  }
+  toast('Enviado para o RawBT! 🖨️');
 }
 
 // ══════════════════════════════════════════════
